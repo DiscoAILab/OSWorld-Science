@@ -1,0 +1,8 @@
+#!/bin/sh
+# Xfce "Preferred Applications" helper wrapper (WebBrowser / MailReader categories).
+# xfce4-mime-helper WAITS for the helper process and, if it exits non-zero, raises the untitled,
+# hard-to-close modal "Failed to execute default Web Browser. Input/output error." (verified on this
+# image: helper exit 1 -> modal + exo-open blocks until it is dismissed; helper exit 0 -> silent,
+# immediate return). So report on stderr via the real wrapper, then exit 0 on purpose.
+/usr/local/bin/osworld-no-browser "$@" || :
+exit 0

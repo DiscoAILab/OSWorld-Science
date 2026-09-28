@@ -1,0 +1,11 @@
+#!/bin/sh
+# OSWorld-Science OpenFOAM guest: no web browser (and no network) is installed, by design.
+# This is the http/https/ftp/mailto/about scheme handler (osworld-no-browser.desktop in
+# /etc/xdg/mimeapps.list), so GIO / gtk_show_uri / in-app "Read Online" links land here and get one
+# explanatory line on stderr instead of the untitled, hard-to-close modal dialog
+# "Failed to execute default Web Browser. Input/output error.".
+# Exits 1: callers that check the status learn that nothing was opened. The Xfce
+# WebBrowser/MailReader helper must NOT see a non-zero status, so it goes through
+# osworld-no-browser-xfce-helper instead -- see that script for why.
+printf 'osworld: this offline image has no web browser; not opening %s\n' "${1:-<url>}" >&2
+exit 1

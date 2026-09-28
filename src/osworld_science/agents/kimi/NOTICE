@@ -1,0 +1,5 @@
+The `upstream/` directory contains code from xlang-ai/OSWorld
+(https://github.com/xlang-ai/OSWorld, mm_agents/kimi/, commit b138d348),
+licensed under the Apache License, Version 2.0 (upstream/LICENSE).
+It is included unmodified except for upstream/__init__.py (see its docstring);
+upstream's mm_agents/kimi/README.md is kept as upstream/README.upstream.md.

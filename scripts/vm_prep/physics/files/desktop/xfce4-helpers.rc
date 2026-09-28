@@ -1,0 +1,10 @@
+# osworld-openfoam guest: Xfce "Preferred Applications" defaults.
+# The stock file points WebBrowser at debian-sensible-browser and MailReader at thunderbird,
+# neither of which exists in this image -- exo-open / xfce4-mime-helper then raise an untitled
+# modal "Failed to execute default Web Browser. Input/output error." and block until it is closed.
+# Point both at /usr/local/bin/osworld-no-browser-xfce-helper, which reports on stderr and exits 0
+# so no dialog is raised (see bin/osworld-no-browser-xfce-helper for the exit-status subtlety).
+WebBrowser=osworld-no-browser
+MailReader=osworld-no-mailer
+TerminalEmulator=debian-x-terminal-emulator
+FileManager=thunar

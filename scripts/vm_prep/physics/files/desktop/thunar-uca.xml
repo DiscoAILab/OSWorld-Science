@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Thunar custom actions (right-click menu). Copied to ~/.config/Thunar/uca.xml on Thunar's first run. -->
+<actions>
+  <action>
+    <icon>utilities-terminal</icon>
+    <patterns>*</patterns>
+    <name>Open Terminal Here</name>
+    <command>exo-open --working-directory %f --launch TerminalEmulator</command>
+    <description>Open a terminal in this folder</description>
+    <startup-notify/>
+    <directories/>
+  </action>
+  <action>
+    <icon>paraview</icon>
+    <patterns>*.foam;*.OpenFOAM;*.vtk;*.vtu;*.vtm;*.pvd;*.pvsm</patterns>
+    <name>Open with ParaView</name>
+    <command>env LIBGL_ALWAYS_SOFTWARE=1 /opt/paraview/bin/paraview %f</command>
+    <description>Open this OpenFOAM case stub / VTK file in ParaView 5.11.2</description>
+    <startup-notify/>
+    <other-files/>
+    <text-files/>
+  </action>
+</actions>

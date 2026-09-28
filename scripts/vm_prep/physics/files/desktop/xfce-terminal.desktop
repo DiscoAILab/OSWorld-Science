@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Terminal
+Exec=xfce4-terminal --working-directory=/home/user
+Icon=utilities-terminal
+Terminal=false
+Categories=System;TerminalEmulator;

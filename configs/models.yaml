@@ -1,0 +1,150 @@
+# Model registry. Local names (keys under `models:`) are directory and column names and must
+# not contain '/'. `model_id` is what the upstream receives. Prices are USD per 1M tokens;
+# null = unknown (cost_usd is recorded as null). `max_out` caps the reply length the caller
+# will request when doubling after a truncated reply. `provider_order` only means something
+# on OpenRouter. `agent: kimi` selects the tool-calling KimiAgent instead of the PromptAgent.
+
+backends:
+  azure:
+    kind: openai_chat
+    url: "${OPENAI_BASE_URL}/openai/v1/chat/completions"
+    key_env: OPENAI_API_KEY
+    max_tokens_field: max_completion_tokens
+    reasoning_style: openai            # reasoning_effort: <effort>
+  anthropic:
+    kind: anthropic_messages
+    url: "${ANTHROPIC_BASE_URL}/v1/messages"
+    key_env: ANTHROPIC_API_KEY
+  openrouter:
+    kind: openai_chat
+    url: "${OPENROUTER_CHAT_URL:-https://openrouter.ai/api/v1/chat/completions}"
+    key_env: OPENROUTER_API_KEY
+    max_tokens_field: max_tokens
+    reasoning_style: openrouter        # reasoning: {effort: <effort>}
+    usage_include: true                # ask for usage.cost in the response
+    supports_provider_order: true
+  google:
+    kind: openai_chat
+    url: "${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}/chat/completions"
+    key_env: GEMINI_API_KEY
+    max_tokens_field: max_tokens
+  qwen:
+    kind: openai_chat
+    url: "${QWEN_BASE_URL}/chat/completions"
+    key_env: QWEN_API_KEY
+    max_tokens_field: max_tokens
+  moonshot:
+    kind: openai_chat
+    url: "${MOONSHOT_BASE_URL:-https://api.moonshot.ai/v1}/chat/completions"
+    key_env: MOONSHOT_API_KEY
+    max_tokens_field: max_tokens
+
+models:
+  gpt-5.6-sol:
+    backend: azure
+    model_id: gpt-5.6-sol
+    reasoning: true
+    price: {in: 5.00, out: 30.00}
+    max_out: 128000
+  gpt-5.6-terra:
+    backend: azure
+    model_id: gpt-5.6-terra
+    reasoning: true
+    price: {in: 2.00, out: 12.00}
+    max_out: 128000
+  gpt-5.6-luna:
+    backend: azure
+    model_id: gpt-5.6-luna
+    reasoning: true
+    price: {in: 0.20, out: 1.20}
+    max_out: 128000
+  gpt-6-astra:
+    backend: azure
+    model_id: gpt-6-astra
+    reasoning: true
+    price: {in: 10.00, out: 50.00}
+    max_out: 128000
+  claude-opus-5:
+    backend: anthropic
+    model_id: claude-opus-5
+    price: {in: 5.00, out: 25.00}
+    max_out: 128000
+  claude-sonnet-5:
+    backend: anthropic
+    model_id: claude-sonnet-5
+    price: {in: 2.00, out: 10.00}
+    max_out: 128000
+  claude-fable-5-1:
+    backend: anthropic
+    model_id: claude-fable-5-1
+    price: {in: 10.00, out: 50.00}
+    max_out: 128000
+  gemini-3.1-pro:
+    backend: google
+    model_id: gemini-3.1-pro-preview
+    price: {in: 2.00, out: 12.00}
+    max_out: 65536
+  qwen3.7-plus:
+    backend: qwen
+    model_id: qwen3.7-plus
+    price: {in: 0.32, out: 1.28}
+    max_out: 131072
+  qwen-cua:
+    backend: qwen
+    model_id: qwen-cua
+    price: {in: 0.32, out: 1.28}     # same as qwen3.7-plus
+    max_out: 131072
+  minimax-m3:
+    backend: openrouter
+    model_id: minimax/minimax-m3
+    price: {in: 0.23, out: 0.96}
+    max_out: 512000
+    provider_order: [minimax]
+  kimi-k3:
+    backend: moonshot
+    model_id: kimi-k3
+    agent: kimi
+    price: {in: 3.00, out: 15.00}
+    max_out: 131072
+
+  # ── OpenRouter variants ──
+  kimi-k3@openrouter:
+    backend: openrouter
+    model_id: moonshotai/kimi-k3
+    agent: kimi
+    price: {in: 3.00, out: 15.00}
+    max_out: 943718
+    provider_order: [moonshotai]
+  gpt-5.6-sol@openrouter:
+    backend: openrouter
+    model_id: openai/gpt-5.6-sol
+    reasoning: true
+    price: {in: 2.00, out: 10.00}
+    max_out: 128000
+    provider_order: [openai]
+  gpt-5.6-terra@openrouter:
+    backend: openrouter
+    model_id: openai/gpt-5.6-terra
+    reasoning: true
+    price: {in: 2.00, out: 12.00}
+    max_out: 128000
+    provider_order: [openai]
+  gpt-5.6-luna@openrouter:
+    backend: openrouter
+    model_id: openai/gpt-5.6-luna
+    reasoning: true
+    price: {in: 0.20, out: 1.20}
+    max_out: 128000
+    provider_order: [openai]
+  gemini-3.1-pro@openrouter:
+    backend: openrouter
+    model_id: "~google/gemini-pro-latest"
+    price: {in: 2.00, out: 12.00}
+    max_out: 65536
+    provider_order: [google-ai-studio, google-vertex]
+  qwen3.7-plus@openrouter:
+    backend: openrouter
+    model_id: qwen/qwen3.7-plus
+    price: {in: 0.32, out: 1.28}
+    max_out: 131072
+    provider_order: [alibaba]

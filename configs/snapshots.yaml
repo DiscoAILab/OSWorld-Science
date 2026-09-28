@@ -1,0 +1,235 @@
+# Snapshot registry. A task's `snapshot` field selects one entry.
+# A snapshot's image lives in data/<domain>/vm/<image> (the dataset mirror); $OSCI_VM_DIR/images/
+# is an optional local fallback and $OSCI_VM_DIR/base/ holds the pristine OSWorld base image.
+defaults:
+  docker_image: happysixd/osworld-docker
+  ram: 8G
+  cpus: 4
+  disk: 128G
+  boot_timeout_s: 1520
+  base_image: Ubuntu.qcow2
+
+snapshots:
+  ubuntu_stat:
+    description: "R 4.4.3 toolchain (statenv), RStudio, Python stats packages, sqlite3. No SAS is installed: the nine SAS-or-R tasks reach SAS OnDemand for Academics through Firefox (scripts/vm_prep/README.md). Built by scripts/vm_prep/stat/build_image.sh from the OSWorld base."
+    domain: stat
+    image: ubuntu_stat.qcow2
+    default_port: 5040
+    container_prefix: osci_stat
+    tools_probe: "command -v R >/dev/null && R --version | head -1"
+    provision: scripts/vm_prep/stat/provision_guest.sh
+    pre_task_hooks:
+      - when_related_app: sas
+        script: scripts/vm_prep/stat/restore_firefox_profile.py
+        required: false
+    check_commands: [R, Rscript, python3, sqlite3, firefox, rstudio]
+    bake_cleanup: "rm -rf /home/user/snap/firefox/common/.mozilla/firefox /home/user/sasuser.v94"
+    window_classes:
+      gnome-terminal: terminal
+      xterm: terminal
+      firefox: firefox
+      rstudio: rstudio
+      code.code: vscode
+      gedit: gedit
+      nautilus: files
+      eog: eog
+
+  ubuntu_radiology:
+    description: Weasis 4.7.3 DICOM viewer and 3D Slicer 5.12.3
+    domain: radiology
+    image: ubuntu_radiology.qcow2
+    default_port: 5050
+    container_prefix: osci_rad
+    tools_probe: "ls /opt/weasis/bin/Weasis /opt/Slicer/Slicer"
+    provision: scripts/vm_prep/radiology/provision_guest.sh
+    pre_task_hooks: []
+    check_commands: [python3, firefox, gedit, weasis, slicer]
+    window_classes:
+      slicer: slicer
+      weasis: weasis
+      gnome-terminal: terminal
+      xterm: terminal
+      eog: eog
+      firefox: firefox
+      code.code: vscode
+      gedit: gedit
+      nautilus: files
+
+  ubuntu_linguistics:
+    description: Praat 6.2.09 with sendpraat
+    domain: linguistics
+    image: ubuntu_linguistics.qcow2
+    default_port: 5080
+    container_prefix: osci_ling
+    tools_probe: "command -v praat && command -v sendpraat"
+    provision: scripts/vm_prep/linguistics/provision_guest.sh
+    pre_task_hooks: []
+    check_commands: [praat, sendpraat, wmctrl, python3, gedit, firefox]
+    bake_cleanup: "pkill -x praat 2>/dev/null; chmod -R u+w /home/user/Desktop/PraatVOT* 2>/dev/null; rm -rf /home/user/Desktop/PraatVOT* /home/user/.praat-dir"
+    window_classes:
+      praat: praat
+      slicer: slicer
+      weasis: weasis
+      gnome-terminal: terminal
+      xterm: terminal
+      eog: eog
+      firefox: firefox
+      code.code: vscode
+      gedit: gedit
+      nautilus: files
+
+  ubuntu_astro:
+    description: "OSWorld Ubuntu 22.04 base + Miniconda3 with the build-locked conda env ciao-4.18 (CIAO 4.18.0, CALDB 4.12.4, ciao-contrib), SAOImageDS9 8.7b2 with its DAX analysis tasks, GNOME launchers for DS9 and a terminal, LibreOffice from the base; 1920x1080. The interactive shell (desktop terminal) activates ciao-4.18; non-interactive shells need `shell_init`. fstrim.timer is masked on purpose; never apt purge/autoremove in this image."
+    domain: astro
+    image: ubuntu_astro.qcow2
+    default_port: 5090
+    container_prefix: osci_astro
+    ram: 12G
+    cpus: 6
+    shell_init: "source /home/user/miniconda3/etc/profile.d/conda.sh && conda activate ciao-4.18"
+    tools_probe: "command -v ds9 && command -v dmlist && command -v dmextract"
+    provision: null
+    pre_task_hooks:
+      - script: scripts/vm_prep/astro/prepare_episode.py
+        required: true
+    check_commands: [ds9, dmlist, dmextract, dmstat, xpaget, python3, libreoffice, firefox, gedit]
+    bake_cleanup: "rm -rf /home/user/cxcds_param4 /home/user/ds9.auto /home/user/ds9.auto.dir /home/user/.ds9 /home/user/.ds9_current_file /home/user/work; find /home/user/CIAO_001 -mindepth 1 -maxdepth 1 ! -name 13858 -exec rm -rf {} +; mkdir -p /tmp/ds9_dax.user && find /tmp/ds9_dax.user -mindepth 1 -delete"
+    window_classes:
+      ds9: ds9
+      saoimage: ds9
+      gnome-terminal: terminal
+      xterm: terminal
+      libreoffice: libreoffice
+      soffice: libreoffice
+      firefox: firefox
+      gedit: gedit
+      nautilus: files
+      eog: eog
+
+  ubuntu_qupath:
+    description: QuPath 0.5.1 (installed at /home/user/QuPath) on the OSWorld base, 1920x1080; whole-slide images need the larger guest
+    domain: biomed
+    image: ubuntu_qupath.qcow2
+    default_port: 5060
+    container_prefix: osci_qp
+    ram: 24G
+    cpus: 8
+    tools_probe: "test -x /home/user/QuPath/bin/QuPath && echo QuPath"
+    pre_task_hooks: []
+    check_commands: [python3, firefox, google-chrome, gedit, libreoffice]
+    bake_cleanup: "rm -rf /home/user/work /home/user/.qupath.lib.gui.QuPathApp /home/user/.java /home/user/.javacpp /home/user/.openjfx"
+    window_classes:
+      qupath: qupath
+      gnome-terminal: terminal
+      xterm: terminal
+      google-chrome: chrome
+      firefox: firefox
+      libreoffice: libreoffice
+      gedit: gedit
+      nautilus: files
+      eog: eog
+
+  ubuntu_biomed:
+    description: "proposed, image not built yet: OSWorld base + open-source PyMOL (apt pymol) and a browser for the structural-biology tasks; the NMR task installs Mnova at staging (network required)"
+    domain: biomed
+    image: ubuntu_biomed.qcow2
+    default_port: 5130
+    container_prefix: osci_bio
+    tools_probe: "command -v pymol"
+    pre_task_hooks:
+      - when_related_app: mnova
+        script: scripts/vm_prep/biomed/install_mnova_license.py
+        required: true
+    check_commands: [pymol, python3, firefox, google-chrome, gedit]
+    window_classes:
+      pymol: pymol
+      gnome-terminal: terminal
+      xterm: terminal
+      google-chrome: chrome
+      firefox: firefox
+      gedit: gedit
+      nautilus: files
+
+  ubuntu_chem:
+    description: "proposed, image not built yet: OSWorld base + chromium + xdrawchem for the chemistry paper-extraction task"
+    domain: chem
+    image: ubuntu_chem.qcow2
+    default_port: 5110
+    container_prefix: osci_chem
+    tools_probe: "command -v xdrawchem"
+    pre_task_hooks: []
+    check_commands: [xdrawchem, chromium, python3, firefox, gedit]
+    window_classes:
+      xdrawchem: xdrawchem
+      chromium: chromium
+      gnome-terminal: terminal
+      xterm: terminal
+      google-chrome: chrome
+      firefox: firefox
+      evince: evince
+      gedit: gedit
+      nautilus: files
+
+  ubuntu_qgis:
+    description: "QGIS 3.44.13 LTR (pinned), profile `osworld`, screen 1920x1080, update check and notifications off"
+    domain: geoscience
+    image: ubuntu_qgis.qcow2
+    default_port: 5120
+    container_prefix: osci_geo
+    tools_probe: "qgis --version 2>/dev/null | grep 3.44.13"
+    provision: null
+    pre_task_hooks: []
+    check_commands: [qgis, python3, gdalinfo, firefox, gedit]
+    bake_cleanup: "rm -rf /home/user/share /home/user/.local/share/QGIS/QGIS3/profiles/osworld/cache"
+    window_classes:
+      qgis: qgis
+      qgis-bin: qgis
+      gnome-terminal: terminal
+      xterm: terminal
+      eog: eog
+      firefox: firefox
+      gedit: gedit
+      nautilus: files
+
+  ubuntu_openfoam:
+    description: The r3 container rebuilt as a VM — Ubuntu 24.04 + Xfce 4.18, OpenFOAM ESI v2512 noble build pinned to 2512.0-1 (binary-identical to opencfd/openfoam-default:2512, gcc 13), ParaView 5.11.2, gnuplot-qt, python3 numpy/scipy/matplotlib/pandas; no browser, no network at run time by design
+    domain: physics
+    image: ubuntu_openfoam.qcow2
+    default_port: 5100
+    container_prefix: osci_of
+    cpus: 8
+    tools_probe: "command -v simpleFoam && command -v paraview && test -f /opt/paraview/bin/pvbatch"
+    provision: scripts/vm_prep/physics/provision_guest.sh
+    pre_task_hooks: []
+    check_commands: [blockMesh, icoFoam, simpleFoam, foamDictionary, decomposePar, mpirun, paraview, pvpython, pvbatch, gnuplot, python3, python, xfce4-terminal, thunar, mousepad, ristretto, atril]
+    bake_cleanup: "rm -rf /home/user/work /home/user/.cache/ParaView /home/user/.config/ParaView/ParaView-UserSettings.json /home/user/.local/share/recently-used.xbel /home/user/.python_history /home/user/.viminfo /home/user/.lesshst /home/user/.cache/thumbnails /home/user/.cache/sessions /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml; mkdir -p /home/user/work /home/user/.config/ParaView; printf '[General]\\nGeneralSettings.ShowWelcomeDialog=0\\n' > /home/user/.config/ParaView/ParaView5.11.2.ini"
+    window_classes:
+      paraview: paraview
+      xfce4-terminal: terminal
+      xterm: terminal
+      mousepad: mousepad
+      thunar: files
+      ristretto: ristretto
+      atril: atril
+
+  ubuntu_openfoam_gnome22:
+    description: FIRST ATTEMPT, kept for reference only — OpenFOAM v2512 (jammy build, gcc 11) + ParaView 5.11.2 on the OSWorld Ubuntu 22.04 GNOME base; superseded by ubuntu_openfoam (Ubuntu 24.04 + Xfce + the exact r3 container build)
+    domain: physics
+    image: ubuntu_openfoam_gnome22.qcow2
+    default_port: 5101
+    container_prefix: osci_ofg
+    cpus: 8
+    tools_probe: "command -v simpleFoam && command -v paraview && test -f /opt/paraview/bin/pvbatch"
+    provision: scripts/vm_prep/physics/provision_guest.sh
+    pre_task_hooks: []
+    check_commands: [blockMesh, icoFoam, simpleFoam, foamDictionary, paraview, pvpython, pvbatch, gnuplot, python3, gedit, gnome-terminal, eog, evince]
+    bake_cleanup: "rm -rf /home/user/work /home/user/.cache/ParaView /home/user/.config/ParaView/ParaView-UserSettings.json /home/user/.local/share/recently-used.xbel /home/user/.python_history /home/user/.viminfo /home/user/.wget-hsts /home/user/.cache/thumbnails /home/user/Downloads/* /home/user/snap/firefox/common/.mozilla/firefox /home/user/.config/gedit /home/user/.local/share/gedit; mkdir -p /home/user/work /home/user/.config/ParaView; printf '[General]\\nGeneralSettings.ShowWelcomeDialog=0\\n' > /home/user/.config/ParaView/ParaView5.11.2.ini"
+    window_classes:
+      paraview: paraview
+      gnome-terminal: terminal
+      xterm: terminal
+      gedit: gedit
+      nautilus: files
+      eog: eog
+      evince: evince
+      code.code: vscode

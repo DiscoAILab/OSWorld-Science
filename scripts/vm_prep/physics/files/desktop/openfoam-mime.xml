@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- .foam / .OpenFOAM stub files (ParaView's OpenFOAM reader) and the VTK files foamToVTK writes,
+     so Thunar opens all of them with ParaView instead of Mousepad. Without the VTK block, *.vtu
+     is sniffed as application/xml and *.vtk / *.pvd as text/plain (r2 review §4.5). -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-openfoam">
+    <comment>OpenFOAM case</comment>
+    <icon name="paraview"/>
+    <glob pattern="*.foam"/>
+    <glob pattern="*.OpenFOAM"/>
+  </mime-type>
+  <mime-type type="application/x-vtk">
+    <comment>VTK dataset</comment>
+    <icon name="paraview"/>
+    <glob pattern="*.vtk" weight="60"/>
+    <glob pattern="*.vtu" weight="60"/>
+    <glob pattern="*.vtp" weight="60"/>
+    <glob pattern="*.vti" weight="60"/>
+    <glob pattern="*.vtm" weight="60"/>
+    <glob pattern="*.vtr" weight="60"/>
+    <glob pattern="*.vts" weight="60"/>
+    <glob pattern="*.pvtu" weight="60"/>
+    <glob pattern="*.pvd" weight="60"/>
+  </mime-type>
+</mime-info>

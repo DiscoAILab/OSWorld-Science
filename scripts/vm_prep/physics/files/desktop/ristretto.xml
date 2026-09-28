@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- osworld-openfoam guest: belt-and-braces for the "The thumbnailer-service can not be reached"
+     warning box Ristretto shows when it cannot talk to tumblerd. tumbler IS installed in r3, so
+     this normally never triggers; pre-seeding it false also covers launch paths that reach
+     Ristretto without the Xfce session D-Bus. -->
+<channel name="ristretto" version="1.0">
+  <property name="errors" type="empty">
+    <property name="missing-thumbnailer" type="bool" value="false"/>
+  </property>
+</channel>

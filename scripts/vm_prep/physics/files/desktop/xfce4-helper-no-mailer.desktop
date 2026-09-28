@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=X-XFCE-Helper
+Name=No Mail Reader (offline image)
+Icon=dialog-information
+StartupNotify=false
+X-XFCE-Binaries=osworld-no-browser-xfce-helper;
+X-XFCE-Category=MailReader
+X-XFCE-Commands=osworld-no-browser-xfce-helper;
+X-XFCE-CommandsWithParameter=osworld-no-browser-xfce-helper "%s";

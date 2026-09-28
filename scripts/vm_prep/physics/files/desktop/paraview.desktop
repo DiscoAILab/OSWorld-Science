@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ParaView 5.11.2
+Comment=Scientific visualization
+Exec=env LIBGL_ALWAYS_SOFTWARE=1 /opt/paraview/bin/paraview %f
+Icon=paraview
+Terminal=false
+Categories=Science;Graphics;
+MimeType=application/x-openfoam;application/x-vtk;application/vnd.kitware.paraview.state;

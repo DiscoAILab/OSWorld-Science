@@ -1,0 +1,64 @@
+[project]
+name = "osworld-science"
+version = "0.1.0"
+description = "OSWorld-Science: GUI-agent benchmark tasks from scientific domains (statistics, radiology, linguistics) with an executable, offline grader."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "pyyaml>=6.0",
+    "pillow>=10.0",
+    "loguru>=0.7",       # used by the vendored Kimi agent (agents/kimi/upstream)
+]
+
+[project.optional-dependencies]
+hf = ["huggingface_hub>=0.30"]
+# what the answer-bearing grader test suites (data/private/<domain>/grader_tests) import
+grader = ["numpy>=1.26", "scipy>=1.11", "pandas>=2.0", "matplotlib>=3.8", "openpyxl>=3.1"]
+# host-side imports of the evaluators shipped inside data/<domain>/private (task authors' own code)
+biomed = ["numpy>=1.26", "shapely>=2.0", "pillow>=10.0", "gemmi>=0.6"]
+chem = ["rdkit>=2024.3.1"]
+# what the six QGIS tasks' shipped checks import; the package also carries a snap calibration
+# evaluator that asserts geographiclib 2.1 exactly, but no shipped task reaches it
+geoscience = ["numpy>=1.26", "pillow>=10.0"]
+
+[project.scripts]
+osci = "osworld_science.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers"
+testpaths = ["tests"]
+markers = [
+    "vm: needs a running guest VM (deselected by default)",
+    "data: needs the data/ tree downloaded from Hugging Face",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["OSWorld", "src/osworld_science/agents/kimi/upstream"]
+force-exclude = true   # the exclusion holds for explicitly passed paths too (a --fix would break the vendored sha256 pin)
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+isort.known-first-party = ["osworld_science"]
+
+[tool.ruff.lint.per-file-ignores]
+# byte-identical to the task author's verifier (praat_vot_task/verifier.py); never reformat
+"src/osworld_science/evaluators/linguistics/praat_vot_verifier.py" = ["ALL"]
+"src/osworld_science/evaluators/linguistics/praat_vot_neg_verifier.py" = ["ALL"]
+# verbatim port of the legacy evaluators/core.py
+"src/osworld_science/evaluators/core.py" = ["UP", "B"]
+

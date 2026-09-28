@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=No Web Browser (offline image)
+Comment=This image has no browser and no network; URLs are not opened
+Exec=/usr/local/bin/osworld-no-browser %u
+Icon=dialog-information
+Terminal=false
+NoDisplay=true
+MimeType=x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/ftp;x-scheme-handler/mailto;x-scheme-handler/about;

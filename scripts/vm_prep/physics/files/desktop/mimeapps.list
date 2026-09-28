@@ -1,0 +1,22 @@
+[Default Applications]
+application/x-openfoam=paraview.desktop
+# foamToVTK output (*.vtu/*.vtk/*.pvd/*.vtm/...); see desktop/openfoam-mime.xml
+application/x-vtk=paraview.desktop
+application/vnd.kitware.paraview.state=paraview.desktop
+# GLib >= 2.76 reports every 0-byte regular file as application/x-zerosize *before* glob matching, and the
+# canonical OpenFOAM ".foam" stub is an empty file. Without this line Thunar opens it in Mousepad.
+# Side effect (documented in README "Known quirks"): ANY empty file double-clicks into ParaView.
+application/x-zerosize=paraview.desktop
+image/png=org.xfce.ristretto.desktop
+image/jpeg=org.xfce.ristretto.desktop
+image/svg+xml=org.xfce.ristretto.desktop
+application/pdf=atril.desktop
+text/plain=org.xfce.mousepad.desktop
+# No browser and no network in this image: send URLs to the no-op wrapper, which prints one line on
+# stderr instead of raising the untitled "Failed to execute default Web Browser" modal. This covers
+# GIO / gtk_show_uri / in-app "Read Online" links; the Xfce helper side is desktop/xfce4-helpers.rc.
+x-scheme-handler/http=osworld-no-browser.desktop
+x-scheme-handler/https=osworld-no-browser.desktop
+x-scheme-handler/ftp=osworld-no-browser.desktop
+x-scheme-handler/mailto=osworld-no-browser.desktop
+x-scheme-handler/about=osworld-no-browser.desktop

@@ -42,22 +42,6 @@ complete.
   </tr>
 </table>
 
-## Why OSWorld-Science?
-
-| | Capability | What it measures |
-|---|---|---|
-| 🔬 | **Real scientific workflows** | Research tasks in molecular drawing, pathology, medical imaging, statistics, GIS, simulation, and more |
-| 🖥️ | **Authentic desktop environments** | Agents operate domain-specific software in reproducible Ubuntu virtual machines |
-| 📏 | **Artifact-based evaluation** | Executable graders verify structured fields, numerical tolerances, and application-native artifacts |
-| ⌨️ | **GUI + CLI interaction** | Tasks test visual grounding together with mouse, keyboard, terminal, and software-specific actions |
-| 🧩 | **Extensible harness** | Registered agents, model adapters, interaction-loop control, trajectory logging, and offline scoring |
-
-The paper evaluates 12 vision-language models with a shared agent harness. The
-best system reaches a **73.7% mean task score**, showing substantial headroom even
-for frontier models. Analysis of 1,530 trajectories further shows that most
-failures are not merely wrong answers: many runs never produce a gradeable
-artifact at all.
-
 ## 📊 Benchmark at a glance
 
 The full benchmark reported in the paper contains 146 tasks across seven

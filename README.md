@@ -1,129 +1,283 @@
-# OSWorld-Science: A Playground of Computer Use Agents for Learning and Using Scientific Software
+<div align="center">
 
-OSWorld-Science is a benchmark for evaluating computer-use agents on
-scientific workflows. It contains 122 tasks across eight domains, each run
-inside an Ubuntu virtual machine equipped with domain-specific desktop
-software.
+# 🧪 OSWorld-Science
 
-Each task follows the OSWorld format: an agent receives a natural-language
-instruction, interacts with the desktop, and leaves behind a set of
-deliverables. Executable, task-specific graders then evaluate those files
-offline against reference results, including structured fields, numerical
-tolerances, and application-native artefacts. Task definitions live in
-`data/<domain>/tasks/*.json` and specify the VM snapshot, staging steps,
-deliverables, and evaluator pipeline.
+### A Benchmark of Computer Use Agents for Learning and Using Scientific Software
 
-## Requirements
+*Can computer-use agents turn scientific intent into verifiable results inside real research software?*
 
-- A **Linux x86-64 host with KVM** (`egrep -c '(vmx|svm)' /proc/cpuinfo` > 0,
-  `/dev/kvm` accessible to your user) and **Docker** (rootless is fine) that can
-  pass `--device /dev/kvm`. The guests are QEMU virtual machines run by the
-  `happysixd/osworld-docker` image; without KVM they are unusably slow.
-- **Around 8 GB RAM and 4 vCPUs per concurrent guest** (`--workers`), plus
-  disk for the prepared domain snapshots (about 196 GB for all eight) and
-  `qemu-img` on the host. Building snapshots yourself additionally requires
-  the 24 GB base image. A snapshot may request more resources (`ram`/`cpus`
-  in `configs/snapshots.yaml`).
-- Python 3.11+ through `uv` (installed by
-  `curl -LsSf https://astral.sh/uv/install.sh | sh`) and `Rscript` (R 4.4.3)
-  for the R-backed statistics evaluators.
-- Not supported: macOS or Windows hosts, hosts without KVM, arm64, the
-  VMware/VirtualBox/cloud providers of upstream OSWorld, Windows guests.
+[![Paper](https://img.shields.io/badge/Paper-PDF-B31B1B?style=for-the-badge&logo=adobeacrobatreader&logoColor=white)](https://sciailab-osworld-science-page.static.hf.space/static/paper/OSWorld-Science.pdf)
+[![Project Page](https://img.shields.io/badge/Project-Page-2563EB?style=for-the-badge&logo=googlechrome&logoColor=white)](https://huggingface.co/spaces/SciAILab/osworld-science-page)
+[![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Dataset-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black)](https://huggingface.co/datasets/SciAILab/OSWorld-Science-data)
+[![Tasks](https://img.shields.io/badge/Benchmark-146%20Tasks-8B5CF6?style=for-the-badge)](https://sciailab-osworld-science-page.static.hf.space/static/paper/OSWorld-Science.pdf)
+[![License](https://img.shields.io/badge/License-CC%20BY%204.0-EF9421?style=for-the-badge&logo=creativecommons&logoColor=white)](LICENSE)
 
-Run `uv run osci doctor` to check the host. See the
-[`docs/user_guide/`](docs/user_guide/) for detailed requirements, benchmark
-usage, and task authoring, or the
-[`docs/developer_guide/`](docs/developer_guide/) for adding domains and agents
-or building VM snapshots.
+[**Paper**](https://sciailab-osworld-science-page.static.hf.space/static/paper/OSWorld-Science.pdf) ·
+[**Project page**](https://huggingface.co/spaces/SciAILab/osworld-science-page) ·
+[**Dataset & VM images**](https://huggingface.co/datasets/SciAILab/OSWorld-Science-data) ·
+[**Documentation**](docs/README.md)
 
-## Quick start
+</div>
+
+---
+
+OSWorld-Science is a benchmark and evaluation environment for studying how
+computer-use agents solve scientifically meaningful tasks with professional
+software. Agents must interpret specialized interfaces, manipulate scientific
+objects, combine GUI and command-line actions, and leave behind results that can
+be checked for scientific correctness.
+
+The benchmark connects **expert-defined scientific goals** to **verifiable
+software outcomes**. Its task-specific evaluators inspect application states and
+artifacts such as molecular structures, segmentation masks, plots, tables, and
+numerical results, awarding partial credit when a workflow is only partly
+complete.
+
+<table align="center">
+  <tr>
+    <td align="center" width="25%"><b>146 tasks</b><br/><sub>Scientifically meaningful workflows</sub></td>
+    <td align="center" width="25%"><b>7 domains</b><br/><sub>From chemistry to linguistics</sub></td>
+    <td align="center" width="25%"><b>17 tools</b><br/><sub>Real scientific software</sub></td>
+    <td align="center" width="25%"><b>12 VLMs</b><br/><sub>Open and proprietary models</sub></td>
+  </tr>
+</table>
+
+## Why OSWorld-Science?
+
+| | Capability | What it measures |
+|---|---|---|
+| 🔬 | **Real scientific workflows** | Research tasks in molecular drawing, pathology, medical imaging, statistics, GIS, simulation, and more |
+| 🖥️ | **Authentic desktop environments** | Agents operate domain-specific software in reproducible Ubuntu virtual machines |
+| 📏 | **Artifact-based evaluation** | Executable graders verify structured fields, numerical tolerances, and application-native artifacts |
+| ⌨️ | **GUI + CLI interaction** | Tasks test visual grounding together with mouse, keyboard, terminal, and software-specific actions |
+| 🧩 | **Extensible harness** | Registered agents, model adapters, interaction-loop control, trajectory logging, and offline scoring |
+
+The paper evaluates 12 vision-language models with a shared agent harness. The
+best system reaches a **73.7% mean task score**, showing substantial headroom even
+for frontier models. Analysis of 1,530 trajectories further shows that most
+failures are not merely wrong answers: many runs never produce a gradeable
+artifact at all.
+
+## 📊 Benchmark at a glance
+
+The full benchmark reported in the paper contains 146 tasks across seven
+scientific domains:
+
+| Scientific domain | Tasks | Share | Example workflows |
+|---|---:|---:|---|
+| Chemistry | 43 | 29.5% | Molecular drawing, paper extraction, retrosynthesis |
+| Physics | 31 | 21.2% | CFD and engineering simulation |
+| Medicine | 26 | 17.8% | Pathology and medical-image analysis |
+| Statistics | 20 | 13.7% | Statistical computing, SQL, plots, and reporting |
+| Biology | 18 | 12.3% | Structural biology, NMR, and microscopy |
+| Geographic information | 6 | 4.1% | GIS digitization, georeferencing, and spatial analysis |
+| Linguistics | 2 | 1.4% | Acoustic analysis and annotation |
+
+The benchmark spans software configurations including QuPath, ChemDraw,
+ASKCOS, SAS/R, OpenFOAM, ANSYS, EEGLAB, PyMOL/Mnova, QGIS, CIAO + DS9,
+Weasis, Praat, 3D Slicer, and PDF viewers. All tasks require visual observation;
+83.6% also support CLI access, while the remaining 16.4% are GUI-only under the
+recorded configurations.
+
+## 🧭 Quick start
+
+### 1. Check the host
+
+OSWorld-Science currently supports Linux x86-64 hosts with KVM and Docker.
+Plan for approximately **8 GB RAM and 4 vCPUs per concurrent guest**, plus disk
+space for the selected VM images. A full download of the eight public runner
+images is approximately 196 GB.
 
 ```bash
-uv sync --extra hf       # Python 3.11+, managed by uv (add --extra grader for grader tests)
-cp .env.example .env     # add credentials for the model backends you use
-
-# Prepare benchmark data and prebuilt VM images.
-uv run python scripts/data_prep/hf_download.py --domain stat --vm  # one domain; repeat --domain, or omit --vm to skip its image
-uv run python scripts/data_prep/hf_download.py --vm                # all domains and VM images (~196 GB)
+egrep -c '(vmx|svm)' /proc/cpuinfo  # must be greater than 0
+ls -l /dev/kvm                      # must be accessible to your user
 ```
+
+Python 3.11+ is managed with [`uv`](https://docs.astral.sh/uv/). The
+R-backed statistics evaluators additionally require `Rscript` (R 4.4.3).
+
+See the [full system requirements](docs/user_guide/requirements.md), or run
+the built-in environment check after installation:
+
+```bash
+uv run osci doctor
+```
+
+### 2. Install
+
+```bash
+git clone https://github.com/DiscoAILab/OSWorld-Science.git
+cd OSWorld-Science
+
+uv sync --extra hf       # add --extra grader when running grader tests
+cp .env.example .env     # add credentials only for the model backends you use
+```
+
+### 3. Download tasks and VM images
+
+```bash
+# One domain and its prepared VM image
+uv run python scripts/data_prep/hf_download.py --domain stat --vm
+
+# All public domains and VM images (~196 GB)
+uv run python scripts/data_prep/hf_download.py --vm
+```
+
+The files are downloaded from the
+[OSWorld-Science dataset](https://huggingface.co/datasets/SciAILab/OSWorld-Science-data).
+
+After downloading, list the complete task registry and validate every task
+definition:
+
+```bash
+uv run osci tasks list       # list all available tasks, grouped by domain
+uv run osci tasks validate   # check every task's schema, evaluator wiring, and snapshot
+```
+
+### 4. Run an evaluation
 
 Use `uv run osci models` to list the model names configured in
-`configs/models.yaml`. `--tasks` accepts `all`, a domain name, or a
-comma-separated list of task IDs. The run command performs its own model
-preflight checks.
+[`configs/models.yaml`](configs/models.yaml). `--tasks` accepts `all`, a domain
+name, or a comma-separated list of task IDs.
 
 ```bash
-uv run osci run --models MODEL[,MODEL...] --tasks {all|DOMAIN|TASK_ID[,TASK_ID...]} [--run-name NAME]
-uv run osci run --models claude-sonnet-5 --tasks stat_qol_sql --run-name smoke                 # one task
-uv run osci run --models claude-sonnet-5 --tasks stat --workers 3 --run-name stat-sweep        # one domain
-uv run osci run --models claude-sonnet-5,gpt-5.6-terra --tasks all --workers 3 --run-name full  # all tasks
-uv run osci report --run full  # PASS/FAIL/VOID counts, scores, steps, and cost CSVs
+# One smoke-test task
+uv run osci run \
+  --models claude-sonnet-5 \
+  --tasks stat_qol_sql \
+  --run-name smoke
+
+# One domain with three concurrent guests
+uv run osci run \
+  --models claude-sonnet-5 \
+  --tasks stat \
+  --workers 3 \
+  --run-name stat-sweep
+
+# Full model × task sweep
+uv run osci run \
+  --models claude-sonnet-5,gpt-5.6-terra \
+  --tasks all \
+  --workers 3 \
+  --run-name full
+
+# Export PASS/FAIL/VOID counts, scores, steps, and costs
+uv run osci report --run full
 ```
 
-Reusing a run name resumes that run and skips completed model–task cells unless `--force` is supplied.
+Reusing a run name resumes that run and skips completed model–task cells unless
+`--force` is supplied. See the [running guide](docs/user_guide/running.md) for
+manual VM control, parallelism, run artifacts, and all command-line options.
 
-## Tasks
+## 🔍 How it works
 
-| Domain | Tasks | Desktop software | Primary deliverables |
-|---|---:|---|---|
-| `astro` | 3 | SAOImage DS9, CIAO, LibreOffice Calc | Chandra measurements and DS9 session evidence |
-| `biomed` | 31 | QuPath, PyMOL, browser, Mnova | Pathology annotations and readouts; structural-biology and NMR outputs |
-| `chem` | 43 | PDF viewer, XDrawChem, browser, terminal | Paper extraction and retrosynthesis plans |
-| `geoscience` | 6 | QGIS | GeoPackage layers, NDVI statistics, and georeferencing points |
-| `linguistics` | 2 | Praat | TextGrids with VOT annotations |
-| `physics` | 14 | OpenFOAM, ParaView, terminal | Converged field matrices |
-| `radiology` | 3 | Weasis, 3D Slicer | Findings tables, landmarks, and notes |
-| `stat` | 20 | R, RStudio, Python, sqlite3 (SAS only as SAS OnDemand for Academics in Firefox; nothing SAS is installed) | Analyses, functions, SQL, plots, and findings |
-
-## How it fits together
-
-```
-data/<domain>/tasks/<id>.json ─►  osci run ──►  reset VM (configs/snapshots.yaml)
-                                          ──►  stage: task.config (execute / upload / launch / sleep)
-                                          ──►  agent loop: screenshot → LLM → pyautogui code (agents registry)
-                                          ──►  collect: evaluator.result[] → runs/<run>/<task>/<model>/submission/
-                                          ──►  score: evaluator.func[] × weights, gates → score.json
+```text
+task definition
+      │
+      ├── reset a domain-specific VM
+      ├── stage inputs and launch scientific software
+      ├── run the agent: screenshot → VLM → GUI/CLI action
+      ├── collect the requested deliverables
+      └── score artifacts with task-specific executable evaluators
+                              │
+                              └── score.json + trajectories + reports
 ```
 
-* **Agents** are registered factories (`osworld_science.agents`). Built in:
-  `prompt` (the OSWorld PromptAgent: screenshot in, pyautogui code out,
-  five-step history) and `kimi` (Moonshot's tool-calling agent, vendored
-  from xlang-ai/OSWorld under Apache-2.0). Add your own with `@register_agent`.
-* **Models** are rows in `configs/models.yaml` (backend, upstream id, price,
-  output cap). Backends speak OpenAI chat/completions or the native
-  Anthropic Messages API; keys come from `.env`.
-* **Evaluators** are registered functions (`osworld_science.evaluators`);
-  the shipped ones cover JSON fields, CSV tables, byte-identity of inputs,
-  artefact checks, R function probes, SQL replay, Slicer markups and Praat
-  TextGrids. Five more (`module_metric`, `package_metric`,
-  `package_text_score`, `text_include_exclude`, `file_min_bytes`) call an
-  evaluator that a task author shipped with the ground truth, unchanged.
-* **Snapshots** are rows in `configs/snapshots.yaml`: which image, which
-  port, how to detect and (re)install the toolchain, which pre-task hooks.
+Every task follows the OSWorld format: an agent receives a natural-language
+instruction, interacts with a desktop, and leaves behind a set of deliverables.
+Task definitions live in `data/<domain>/tasks/*.json` and specify the VM snapshot,
+staging steps, deliverables, and evaluator pipeline.
 
-## Data
+- **Agents.** Registered factories live under `osworld_science.agents`. The
+  built-in `prompt` agent uses the OSWorld PromptAgent interaction pattern; the
+  built-in `kimi` agent is Moonshot's tool-calling agent, vendored from
+  xlang-ai/OSWorld under Apache-2.0.
+- **Models.** [`configs/models.yaml`](configs/models.yaml) records backend,
+  upstream model ID, pricing, output limits, and optional agent selection.
+- **Evaluators.** The registry includes JSON, CSV, artifact, R, SQL, Slicer, and
+  Praat evaluators, along with task-author-provided scientific checks.
+- **Snapshots.** [`configs/snapshots.yaml`](configs/snapshots.yaml) maps each
+  task to a reproducible image, resource requirements, toolchain probes, and
+  pre-task hooks.
 
-One directory per domain: `data/<domain>/tasks/` holds the task
-definitions, `data/<domain>/public/` is what the guest receives,
-`data/<domain>/private/` is what only the grader reads (ground truth and the
-grader test suites), `data/<domain>/vm/` holds the domain's prepared VM image
-with its md5. "private" names what
-the solver never sees, not an access control: **the answer keys are
-published**, so a score from a model that may have trained on the dataset is
-not a held-out measurement.
-The dataset is released under CC BY-NC 4.0: its sources are open data
-usable for academic research.
-The prepared VM images are 23–34 GB each; `hf_download.py --domain <d> --vm`
-fetches one, or `scripts/vm_prep/<d>/build_image.sh` rebuilds it from the
-official OSWorld base image.
+## 📂 Data layout
 
-## Repository map
-
+```text
+data/<domain>/
+├── tasks/     # task definitions
+├── public/    # inputs staged into the guest
+├── private/   # grader references and test suites
+└── vm/        # prepared VM image and checksum
 ```
-data/             (git-ignored, from Hugging Face) <domain>/{tasks,public,private,vm}
-configs/          models.yaml, snapshots.yaml
-src/osworld_science/   the package: tasks, guest, vm, harness, evaluators, llm, agents, runner, reporting, cli
-scripts/          data_prep (HF sync), vm_prep (image builds)
-tests/            unit tests (no data) and grader parity tests (need data/)
-docs/             user_guide/ (requirements, running, adding a task), developer_guide/ (domains, agents, VM snapshots)
+
+The name `private/` means that its contents are hidden from the solver during a
+run; it is not an access-control boundary. The published dataset includes answer
+keys, so results from models that may have trained on the dataset should not be
+interpreted as held-out measurements.
+
+Prepared VM images are approximately 23–34 GB each. Download an image with
+`hf_download.py --domain <domain> --vm`, or rebuild it from the official OSWorld
+base image with the corresponding script under `scripts/vm_prep/`.
+
+## 📦 Repository map
+
+```text
+configs/               model and VM snapshot registries
+data/                  downloaded tasks, references, inputs, and VM images
+docs/                  user and developer guides
+scripts/data_prep/     Hugging Face dataset synchronization
+scripts/vm_prep/       reproducible domain-image build scripts
+src/osworld_science/   agents, harness, VM control, evaluators, and CLI
+tests/                 unit tests and grader-parity tests
 ```
+
+## 📚 Documentation
+
+- [System requirements](docs/user_guide/requirements.md)
+- [Running the benchmark](docs/user_guide/running.md)
+- [Adding a task](docs/user_guide/adding-a-task.md)
+- [Adding a domain](docs/developer_guide/adding-a-domain.md)
+- [Adding an agent](docs/developer_guide/adding-an-agent.md)
+- [Building a VM snapshot](docs/developer_guide/building-a-vm-snapshot.md)
+
+## 🍻 Acknowledgements
+
+OSWorld-Science builds on and is inspired by the following open-source projects:
+
+- **[OSWorld](https://github.com/xlang-ai/OSWorld)**, for establishing a
+  foundational benchmark, environment, and interaction framework for evaluating
+  multimodal agents on real computer tasks.
+- **[Orion](https://github.com/Genentech/Orion)**, for pioneering computer-use
+  agents for laboratory automation and inspiring scientific-software workflows
+  in this benchmark.
+
+We thank the authors and contributors of both projects for making their work
+publicly available to the research community.
+
+## 📝 Citation
+
+If OSWorld-Science is useful in your work, please cite the paper:
+
+```bibtex
+@misc{dai2026osworldscience,
+  title  = {{OSWorld-Science}: A Benchmark of Computer Use Agents for Learning and Using Scientific Software},
+  author = {Dai, Dingyuan and Qi, Heli and Liu, Lei and Li, Yinxi and Chen, Baiding and Dou, Zijun and Zeng, Qingcheng and Kang, Qi and Sun, Oliver and Wang, Eric and Zhou, Bo and Wang, Haixin and Du, Yufan and Bo, Shi and Lin, Ruihan and Yuan, Mengqi and Lu, Dunjie and Dillmann, Steven and Shi, Yiming and Su, Tina and Xin, Xin and Liu, Minghao and Wang, Xi and Huang, Xu and Zhang, Ge and Nie, Pengyu and Yang, Zhen and Tang, Jie and Li, Juanzi and Xuan, Weihao and Liu, Tianyu},
+  year   = {2026},
+  note   = {Preprint},
+  url    = {https://sciailab-osworld-science-page.static.hf.space/static/paper/OSWorld-Science.pdf}
+}
+```
+
+## 📄 License
+
+This repository is released under the [Creative Commons Attribution 4.0
+International License](LICENSE). Individual third-party software, datasets, and
+vendored components remain subject to their respective licenses.
+
+<div align="center">
+
+**[Read the paper](https://sciailab-osworld-science-page.static.hf.space/static/paper/OSWorld-Science.pdf)**
+· **[Explore the project](https://huggingface.co/spaces/SciAILab/osworld-science-page)**
+· **[Download the data](https://huggingface.co/datasets/SciAILab/OSWorld-Science-data)**
+
+</div>

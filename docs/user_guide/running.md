@@ -16,7 +16,7 @@ uv run osci score stat_qol_sql --submission /tmp/sub
 ```bash
 uv run osci run --models claude-sonnet-5,gpt-5.6-terra --tasks stat --workers 2 --run-name stat_sweep
 uv run osci run --models kimi-k3 --tasks all --run-name kimi              # models.yaml pins agent: kimi
-uv run osci run --models claude-sonnet-5 --tasks radiology --force        # redo finished cells
+uv run osci run --models claude-sonnet-5 --tasks biomed --force          # redo biomedical + medical-imaging cells
 uv run osci report --run stat_sweep
 ```
 

@@ -1,12 +1,13 @@
 # Adding a domain
 
-A domain is a folder of tasks that share a desktop (one VM snapshot, or a
-few) and, usually, a few domain-specific evaluators. The shipped domains are
-the template: `stat` (R/RStudio/Python desktop, 20 tasks), `radiology`
-(Weasis + 3D Slicer, 3 tasks), `linguistics` (Praat, 2 tasks), `biomed`
-(QuPath, and PyMOL + browser; 26 tasks) and `chem` (browser + XDrawChem,
-1 task). A domain may declare more than one snapshot; each task names the
-one it runs on.
+A domain is a folder of related tasks that may use one VM snapshot or several,
+and usually a few domain-specific evaluators. The shipped domains are the
+template: `stat` (R/RStudio/Python, 20 tasks), `biomed` (QuPath, PyMOL,
+browser/Mnova, Weasis, and 3D Slicer across three snapshots; 34 tasks),
+`linguistics` (Praat, 2 tasks), `chem` (browser + molecular drawing, 43
+tasks), `geoscience` (QGIS, 6 tasks), `astro` (CIAO + DS9, 3 tasks), and
+`physics` (OpenFOAM + ParaView, 14 tasks). Each task names the snapshot it
+runs on.
 
 Everything a domain consists of, and where it goes:
 

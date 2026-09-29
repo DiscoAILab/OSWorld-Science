@@ -93,9 +93,15 @@ uv run osci doctor
 git clone https://github.com/DiscoAILab/OSWorld-Science.git
 cd OSWorld-Science
 
-uv sync --extra hf       # add --extra grader when running grader tests
+uv sync --extra hf       # core package + dev tools + Hugging Face downloader
 cp .env.example .env     # add credentials only for the model backends you use
 ```
+
+`uv sync` installs the core package and the default development tools
+(`pytest` and `ruff`). Optional extras are opt-in: `hf` downloads the dataset,
+`grader` supports grader tests, and `biomed`, `chem`, and `geoscience` provide
+domain-specific evaluator dependencies. Repeat `--extra` to combine them, or
+run `uv sync --all-extras` to install every extra.
 
 ### 3. Download tasks and VM images
 

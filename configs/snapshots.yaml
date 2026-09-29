@@ -36,7 +36,7 @@ snapshots:
 
   ubuntu_radiology:
     description: Weasis 4.7.3 DICOM viewer and 3D Slicer 5.12.3
-    domain: radiology
+    domain: biomed
     image: ubuntu_radiology.qcow2
     default_port: 5050
     container_prefix: osci_rad

@@ -4,7 +4,7 @@
     uv run python scripts/data_prep/hf_download.py                       # every domain's public + private trees
     uv run python scripts/data_prep/hf_download.py --domain stat         # one domain (repeatable)
     uv run python scripts/data_prep/hf_download.py --domain stat --vm    # + its prepared VM image (23-34 GB)
-    uv run python scripts/data_prep/hf_download.py --vm-only --domain radiology
+    uv run python scripts/data_prep/hf_download.py --vm-only --domain biomed
 
 The dataset (OSCI_HF_DATA_REPO in .env) has one directory per domain:
 <domain>/tasks (task definitions), <domain>/public (guest assets),

@@ -76,7 +76,7 @@ def _suite_root(tmp_path_factory, domain: str) -> Path | None:
 
 
 @pytest.mark.data
-@pytest.mark.parametrize("domain", ["linguistics", "radiology", "stat", "geoscience", "astro"])
+@pytest.mark.parametrize("domain", ["linguistics", "biomed", "stat", "geoscience", "astro"])
 def test_grader_suite(domain, tmp_path_factory):
     root = _suite_root(tmp_path_factory, domain)
     if root is None:
@@ -99,7 +99,7 @@ def test_grader_suite(domain, tmp_path_factory):
         r = subprocess.run(args, cwd=root, env=env, capture_output=True, text=True, timeout=7200)
         tail = f"[{suite.name}]\n" + r.stdout[-3000:] + r.stderr[-1500:]
         assert r.returncode == 0, tail
-        # stat prints "N/N checks behaved as intended"; radiology/linguistics/geoscience print
+        # stat prints "N/N checks behaved as intended"; biomed/linguistics/geoscience print
         # "ALL BEHAVED AS INTENDED"; the astro authors' suites print "ALL TESTS PASSED" /
         # "ALL SUITES PASSED"
         low = r.stdout.lower()

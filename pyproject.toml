@@ -1,7 +1,7 @@
 [project]
 name = "osworld-science"
 version = "0.1.0"
-description = "OSWorld-Science: GUI-agent benchmark tasks from scientific domains (statistics, radiology, linguistics) with an executable, offline grader."
+description = "OSWorld-Science: scientific-software computer-use tasks with executable, offline graders."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
@@ -61,4 +61,3 @@ isort.known-first-party = ["osworld_science"]
 "src/osworld_science/evaluators/linguistics/praat_vot_neg_verifier.py" = ["ALL"]
 # verbatim port of the legacy evaluators/core.py
 "src/osworld_science/evaluators/core.py" = ["UP", "B"]
-

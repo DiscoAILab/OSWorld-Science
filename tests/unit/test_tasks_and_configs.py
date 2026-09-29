@@ -8,10 +8,10 @@ from osworld_science.vm.snapshots import SnapshotRegistry
 
 
 def test_task_count_and_domains(taskset):
-    assert taskset.domains() == ["astro", "biomed", "chem", "geoscience", "linguistics", "physics", "radiology", "stat"]
-    assert len(taskset.ids("stat")) == 20 and len(taskset.ids("radiology")) == 3
+    assert taskset.domains() == ["astro", "biomed", "chem", "geoscience", "linguistics", "physics", "stat"]
+    assert len(taskset.ids("stat")) == 20
     assert len(taskset.ids("linguistics")) == 2
-    assert len(taskset.ids("biomed")) == 31 and len(taskset.ids("chem")) == 43  # 23 QuPath + 8 structural biology/NMR; retro/struct/lenacapavir
+    assert len(taskset.ids("biomed")) == 34 and len(taskset.ids("chem")) == 43  # 23 QuPath + 8 structural biology/NMR + 3 radiology; retro/struct/lenacapavir
     assert len(taskset.ids("geoscience")) == 6                                  # six QGIS remote sensing tasks
     assert len(taskset.ids("astro")) == 3 and len(taskset.ids("physics")) == 14  # Chandra/DS9; OpenFOAM OF-xxx
     assert len(taskset) == 122
@@ -32,7 +32,7 @@ def test_prompt_appends_deliverables(taskset):
 
 
 def test_select_tasks(taskset):
-    assert [t.id for t in select_tasks(taskset, "radiology")] == taskset.ids("radiology")
+    assert [t.id for t in select_tasks(taskset, "biomed")] == taskset.ids("biomed")
     assert [t.id for t in select_tasks(taskset, "stat_qol_sql, praat_vot_plosive1")] == \
         ["stat_qol_sql", "praat_vot_plosive1"]
     assert len(select_tasks(taskset, "all", domain="stat")) == 20

@@ -5,9 +5,9 @@ and usually a few domain-specific evaluators. The shipped domains are the
 template: `stat` (R/RStudio/Python, 20 tasks), `biomed` (QuPath, PyMOL,
 browser/Mnova, Weasis, and 3D Slicer across three snapshots; 34 tasks),
 `linguistics` (Praat, 2 tasks), `chem` (browser + molecular drawing, 43
-tasks), `geoscience` (QGIS, 6 tasks), `astro` (CIAO + DS9, 3 tasks), and
-`physics` (OpenFOAM + ParaView, 14 tasks). Each task names the snapshot it
-runs on.
+tasks), `geoscience` (QGIS, 6 tasks), and `physics` (OpenFOAM + ParaView,
+CIAO + DS9, and Ansys Fluent across three snapshots; 31 tasks). Each task
+names the snapshot it runs on.
 
 Everything a domain consists of, and where it goes:
 
@@ -171,8 +171,9 @@ never touch the guest. If a check runs solver-written code (as
 * `pre_task_hooks` run host scripts before staging, optionally only for
   tasks whose `related_apps` contains a keyword (`when_related_app`);
   `required: false` logs a failure and continues. The stat domain uses one
-  to restore a browser profile; the astro domain uses a required one to
-  bring up DS9 in the state its tasks assume (`scripts/vm_prep/astro/`).
+  to restore a browser profile; the CIAO snapshot (`ubuntu_astro`, physics
+  domain) uses a required one to bring up DS9 in the state its tasks assume
+  (`scripts/vm_prep/astro/`).
   Hooks receive `--port`; `.py` hooks run under the project's interpreter.
 * `window_classes` maps WM_CLASS substrings to tags; the runner records
   `wmctrl -lx` every step and tallies `apps_seen` in `meta.json`, which is

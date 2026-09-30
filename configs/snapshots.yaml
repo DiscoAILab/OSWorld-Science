@@ -80,7 +80,7 @@ snapshots:
 
   ubuntu_astro:
     description: "OSWorld Ubuntu 22.04 base + Miniconda3 with the build-locked conda env ciao-4.18 (CIAO 4.18.0, CALDB 4.12.4, ciao-contrib), SAOImageDS9 8.7b2 with its DAX analysis tasks, GNOME launchers for DS9 and a terminal, LibreOffice from the base; 1920x1080. The interactive shell (desktop terminal) activates ciao-4.18; non-interactive shells need `shell_init`. fstrim.timer is masked on purpose; never apt purge/autoremove in this image."
-    domain: astro
+    domain: physics
     image: ubuntu_astro.qcow2
     default_port: 5090
     container_prefix: osci_astro
@@ -233,3 +233,12 @@ snapshots:
       eog: eog
       evince: evince
       code.code: vscode
+
+  ansys_win10_fluent2026r1:
+    description: "Windows 10 Pro 22H2 + Ansys Student 2026 R1 (Fluent), 1920x1080. Not distributed: Windows 10 and Ansys Student cannot be redistributed; rebuild it with data/physics/vm/build_recipe/ (see data/physics/vm/ansys_win10_fluent2026r1.manifest.json). The Docker backend (happysixd/osworld-docker, Linux guests) does not boot this Windows/UEFI guest without changes."
+    domain: physics
+    image: ansys_win10_fluent2026r1.qcow2
+    default_port: 5140
+    container_prefix: osci_ansys
+    ram: 12G
+    cpus: 4

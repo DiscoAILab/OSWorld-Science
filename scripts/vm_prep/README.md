@@ -16,7 +16,8 @@ scripts/vm_prep/
 │                 python packages, ImageMagick), restore_firefox_profile.py, snapshot_firefox_profile.sh,
 │                 check_oda_home.py
 ├── radiology/    provision_guest.sh → weasis_setup.py + slicer_setup.py + slicer_firstrun.sh
-└── linguistics/  provision_guest.sh → praat_setup.py
+├── linguistics/  provision_guest.sh → praat_setup.py
+└── eeg/          provision_guest.sh (apt octave + octave-signal/statistics, git clone EEGLAB 2025.1.0 → /opt/eeglab)
 ```
 
 Build an image:
@@ -26,6 +27,7 @@ scripts/vm_prep/base/download_base.sh
 scripts/vm_prep/stat/build_image.sh          # ~30-60 min; port 5040 by default
 scripts/vm_prep/radiology/build_image.sh     # port 5050
 scripts/vm_prep/linguistics/build_image.sh   # port 5080
+scripts/vm_prep/eeg/build_image.sh           # port 5150
 ```
 
 Discipline: **reset, install, bake**. `osci vm bake` refuses a guest that

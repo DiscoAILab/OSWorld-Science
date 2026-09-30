@@ -242,3 +242,22 @@ snapshots:
     container_prefix: osci_ansys
     ram: 12G
     cpus: 4
+
+  ubuntu_eeglab:
+    description: "OSWorld Ubuntu 22.04 base + GNU Octave (octave-signal, octave-statistics) + EEGLAB 2025.1.0 cloned to /opt/eeglab and added to ~/.octaverc. Terminal-only scientific EEG analysis (the 10 eeglab-cli-* tasks); no MATLAB. Built by scripts/vm_prep/eeg/build_image.sh; until the image is published, `osci vm reset` provisions the base through tools_probe/provision (network needed)."
+    domain: eeg
+    image: ubuntu_eeglab.qcow2
+    default_port: 5150
+    container_prefix: osci_eeg
+    tools_probe: "command -v octave && test -f /opt/eeglab/eeglab.m"
+    provision: scripts/vm_prep/eeg/provision_guest.sh
+    pre_task_hooks: []
+    check_commands: [octave, python3, gedit, gnome-terminal, firefox]
+    bake_cleanup: "rm -rf /home/user/work /home/user/.octave_hist /home/user/octave-workspace"
+    window_classes:
+      gnome-terminal: terminal
+      xterm: terminal
+      octave: octave
+      gedit: gedit
+      nautilus: files
+      firefox: firefox

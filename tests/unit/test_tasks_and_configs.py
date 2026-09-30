@@ -8,13 +8,14 @@ from osworld_science.vm.snapshots import SnapshotRegistry
 
 
 def test_task_count_and_domains(taskset):
-    assert taskset.domains() == ["biomed", "chem", "geoscience", "linguistics", "physics", "stat"]
+    assert taskset.domains() == ["biomed", "chem", "eeg", "geoscience", "linguistics", "physics", "stat"]
     assert len(taskset.ids("stat")) == 20
     assert len(taskset.ids("linguistics")) == 2
+    assert len(taskset.ids("eeg")) == 10                                         # ten EEGLAB terminal-science tasks (Octave + EEGLAB 2025.1.0)
     assert len(taskset.ids("biomed")) == 34 and len(taskset.ids("chem")) == 43  # 23 QuPath + 8 structural biology/NMR + 3 radiology; retro/struct/lenacapavir
     assert len(taskset.ids("geoscience")) == 6                                  # six QGIS remote sensing tasks
     assert len(taskset.ids("physics")) == 31  # 14 OpenFOAM OF-xxx + 3 CIAO/DS9 chandra-* + 14 Ansys Fluent FT/FV-xxx
-    assert len(taskset) == 136
+    assert len(taskset) == 146
 
 
 def test_every_task_validates(taskset, settings):

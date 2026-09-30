@@ -26,7 +26,7 @@ def test_layout_paths(tmp_path):
 def test_snapshots_carry_a_domain():
     s = Settings.load()
     reg = SnapshotRegistry(s.configs_dir / "snapshots.yaml")
-    assert {reg[n].domain for n in reg.names()} == {"stat", "linguistics", "biomed", "chem", "geoscience", "physics"}
+    assert {reg[n].domain for n in reg.names()} == {"stat", "linguistics", "biomed", "chem", "geoscience", "physics", "eeg"}
 
 
 def test_image_resolution_order(tmp_path):

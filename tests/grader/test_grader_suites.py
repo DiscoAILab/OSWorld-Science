@@ -78,7 +78,7 @@ def _suite_root(tmp_path_factory, domain: str) -> Path | None:
 
 
 @pytest.mark.data
-@pytest.mark.parametrize("domain", ["linguistics", "biomed", "stat", "geoscience", "physics"])
+@pytest.mark.parametrize("domain", ["linguistics", "biomed", "stat", "geoscience", "physics", "eeg"])
 def test_grader_suite(domain, tmp_path_factory):
     root = _suite_root(tmp_path_factory, domain)
     if root is None:
@@ -102,7 +102,7 @@ def test_grader_suite(domain, tmp_path_factory):
         tail = f"[{suite.name}]\n" + r.stdout[-3000:] + r.stderr[-1500:]
         assert r.returncode == 0, tail
         # stat prints "N/N checks behaved as intended"; biomed/linguistics/geoscience print
-        # "ALL BEHAVED AS INTENDED"; in physics the CIAO authors' suites print "ALL TESTS PASSED" /
+        # "ALL BEHAVED AS INTENDED"; eeg prints "N/N tasks behaved as intended"; in physics the CIAO authors' suites print "ALL TESTS PASSED" /
         # "ALL SUITES PASSED" and the Ansys suite "N fixture gradings over M tasks; 0 failure(s) in total"
         low = r.stdout.lower()
         assert any(p in low for p in ("behaved as intended", "all tests passed", "all suites passed", " 0 failure(s) in total")), tail

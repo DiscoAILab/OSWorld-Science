@@ -256,9 +256,11 @@ If OSWorld-Science is useful in your work, please cite the paper:
 @misc{dai2026osworldscience,
   title  = {{OSWorld-Science}: A Benchmark of Computer Use Agents for Learning and Using Scientific Software},
   author = {Dai, Dingyuan and Qi, Heli and Liu, Lei and Li, Yinxi and Chen, Baiding and Dou, Zijun and Zeng, Qingcheng and Kang, Qi and Sun, Oliver and Wang, Eric and Zhou, Bo and Wang, Haixin and Du, Yufan and Bo, Shi and Lin, Ruihan and Yuan, Mengqi and Lu, Dunjie and Dillmann, Steven and Shi, Yiming and Su, Tina and Xin, Xin and Liu, Minghao and Wang, Xi and Huang, Xu and Zhang, Ge and Nie, Pengyu and Yang, Zhen and Tang, Jie and Li, Juanzi and Xuan, Weihao and Liu, Tianyu},
-  year   = {2026},
-  note   = {Preprint},
-  url    = {https://arxiv.org/pdf/2609.39903}
+  year={2026},
+  eprint={2609.39903},
+  archivePrefix={arXiv},
+  primaryClass={cs.AI},
+  url={https://arxiv.org/abs/2609.39903}, 
 }
 ```
 

@@ -53,7 +53,7 @@ scientific domains:
 | Physics | 31 | 21.2% | CFD and engineering simulation |
 | Medicine | 26 | 17.8% | Pathology and medical-image analysis |
 | Statistics | 20 | 13.7% | Statistical computing, SQL, plots, and reporting |
-| Biology | 18 | 12.3% | Structural biology, NMR, and microscopy |
+| Biology | 18 | 12.3% | Structural biology, NMR, microscopy, and EEG analysis |
 | Geographic information | 6 | 4.1% | GIS digitization, georeferencing, and spatial analysis |
 | Linguistics | 2 | 1.4% | Acoustic analysis and annotation |
 
@@ -99,9 +99,9 @@ cp .env.example .env     # add credentials only for the model backends you use
 
 `uv sync` installs the core package and the default development tools
 (`pytest` and `ruff`). Optional extras are opt-in: `hf` downloads the dataset,
-`grader` supports grader tests, and `biomed`, `chem`, and `geoscience` provide
-domain-specific evaluator dependencies. Repeat `--extra` to combine them, or
-run `uv sync --all-extras` to install every extra.
+`grader` supports grader tests, and `biomed`, `chem`, `eeg`, and `geoscience`
+provide domain-specific evaluator dependencies. Repeat `--extra` to combine
+them, or run `uv sync --all-extras` to install every extra.
 
 ### 3. Download tasks and VM images
 
@@ -109,12 +109,16 @@ run `uv sync --all-extras` to install every extra.
 # One domain and its prepared VM image
 uv run python scripts/data_prep/hf_download.py --domain stat --vm
 
-# All public domains and VM images (~196 GB)
-uv run python scripts/data_prep/hf_download.py --vm
+# All 146 tasks and every published VM image (~210 GB).
+# --prune moves local-only files from older releases into a timestamped backup.
+uv run python scripts/data_prep/hf_download.py --vm --prune
 ```
 
 The files are downloaded from the
 [OSWorld-Science dataset](https://huggingface.co/datasets/SciAILab/OSWorld-Science-data).
+Task data and graders are available for all 146 tasks. The EEGLAB guest image
+is not yet published, and the Windows/Ansys Fluent image cannot be
+redistributed; see the dataset card for current image availability.
 
 After downloading, list the complete task registry and validate every task
 definition:

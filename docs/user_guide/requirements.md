@@ -41,7 +41,8 @@ it runs on and exits non-zero on a hard failure.
 | Windows hosts (Docker Desktop / WSL2) | not supported, untested | the `/dev/kvm`, `/dev/net/tun` and `CAP_NET_ADMIN` path is untested there |
 | hosts without KVM (cloud VMs without nested virtualisation, CI runners) | not supported | software emulation is far too slow for GUI agents; the guest never becomes usable within the boot window |
 | arm64 hosts | not supported | x86-64 images only |
-| Windows guests | not supported | every task and snapshot is Ubuntu; evaluators assume Linux paths |
+| Windows guests | not supported by the current backend | the 14 Ansys Fluent task definitions and graders are published, but their Windows 10 guest cannot be redistributed and the Linux-oriented Docker/KVM lifecycle cannot boot it without changes |
+| EEGLAB tasks without a local image | data and offline scoring only | the 10 task definitions, inputs, and graders are published, but `ubuntu_eeglab.qcow2` and its provisioner are not yet available |
 | sweeps spread over several hosts | not supported | one host, one port range, one `runs/<name>/summary.json`; run separate sweeps and merge the report CSVs |
 | running under a SLURM batch job | not supported | the guests are long-lived Docker containers on a node with `/dev/kvm`; a batch allocation that cannot reach the Docker socket cannot start them |
 | accessibility-tree / set-of-marks observations, the `computer_13` action space of upstream OSWorld | not supported | only screenshot + pyautogui is implemented |

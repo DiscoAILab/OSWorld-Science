@@ -13,6 +13,7 @@ def test_task_count_and_domains(taskset):
     assert len(taskset.ids("linguistics")) == 2
     assert len(taskset.ids("eeg")) == 10                                         # ten EEGLAB terminal-science tasks (Octave + EEGLAB 2025.1.0)
     assert len(taskset.ids("biomed")) == 34 and len(taskset.ids("chem")) == 43  # 23 QuPath + 8 structural biology/NMR + 3 radiology; retro/struct/lenacapavir
+    assert len(taskset.ids("eeg")) == 10                                      # EEGLAB terminal-science workflows
     assert len(taskset.ids("geoscience")) == 6                                  # six QGIS remote sensing tasks
     assert len(taskset.ids("physics")) == 31  # 14 OpenFOAM OF-xxx + 3 CIAO/DS9 chandra-* + 14 Ansys Fluent FT/FV-xxx
     assert len(taskset) == 146
@@ -51,6 +52,9 @@ def test_snapshots_config(settings):
     lic = reg["ubuntu_biomed"].pre_task_hooks[0]                   # the operator's Mnova licence
     assert lic.required and lic.when_related_app == "mnova"
     assert lic.applies_to(["mnova", "terminal"]) and not lic.applies_to(["pymol", "chrome"])
+    assert reg["ubuntu_astro"].domain == "physics"
+    assert reg["ubuntu_eeglab"].domain == "eeg" and reg["ubuntu_eeglab"].default_port == 5150
+    assert reg["ansys_win10_fluent2026r1"].domain == "physics"
 
 
 def test_models_config_resolves_with_fake_env(settings):

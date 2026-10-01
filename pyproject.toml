@@ -18,7 +18,9 @@ hf = ["huggingface_hub>=0.30"]
 grader = ["numpy>=1.26", "scipy>=1.11", "pandas>=2.0", "matplotlib>=3.8", "openpyxl>=3.1"]
 # host-side imports of the evaluators shipped inside data/<domain>/private (task authors' own code)
 biomed = ["numpy>=1.26", "shapely>=2.0", "pillow>=10.0", "gemmi>=0.6"]
-chem = ["rdkit>=2024.3.1"]
+# The 20 retrosynthesis evaluators deliberately reject any other RDKit build.
+chem = ["rdkit==2026.3.5"]
+eeg = ["numpy>=1.26", "scipy>=1.11"]
 # what the six QGIS tasks' shipped checks import; the package also carries a snap calibration
 # evaluator that asserts geographiclib 2.1 exactly, but no shipped task reaches it
 geoscience = ["numpy>=1.26", "pillow>=10.0"]

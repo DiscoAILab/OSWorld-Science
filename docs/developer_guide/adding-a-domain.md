@@ -5,9 +5,11 @@ and usually a few domain-specific evaluators. The shipped domains are the
 template: `stat` (R/RStudio/Python, 20 tasks), `biomed` (QuPath, PyMOL,
 browser/Mnova, Weasis, and 3D Slicer across three snapshots; 34 tasks),
 `linguistics` (Praat, 2 tasks), `chem` (browser + molecular drawing, 43
-tasks), `geoscience` (QGIS, 6 tasks), and `physics` (OpenFOAM + ParaView,
-CIAO + DS9, and Ansys Fluent across three snapshots; 31 tasks). Each task
-names the snapshot it runs on.
+tasks), `eeg` (Octave + EEGLAB, 10 tasks), `geoscience` (QGIS, 6 tasks), and
+`physics` (OpenFOAM + ParaView, CIAO + DS9, and Ansys Fluent across three
+snapshots; 31 tasks). Each task names the snapshot it runs on. The EEG task
+payload is published, but its prepared image and provisioner are still a
+release TODO; use it as a data/evaluator example, not as a completed VM recipe.
 
 Everything a domain consists of, and where it goes:
 
@@ -130,7 +132,15 @@ a script that never reads a solver's output, and no ground-truth value may
 appear in an instruction.
 
 Both trees are mirrors of one public Hugging Face dataset; after adding a
-domain run `scripts/data_prep/hf_upload.py` (`--dry-run` first).
+domain, remove generated `__pycache__`/`*.pyc` files and rebuild the inventory:
+
+```bash
+uv run python scripts/data_prep/build_manifest.py
+uv run python scripts/data_prep/build_manifest.py --check
+```
+
+Run the dataset upload command with a dry run first. Deletions must be included
+in that upload as well as additions, otherwise stale files remain on the Hub.
 
 ## 5. Evaluators
 

@@ -170,6 +170,24 @@ snapshots:
       gedit: gedit
       nautilus: files
 
+  ubuntu_eeglab:
+    description: "GNU Octave + EEGLAB 2025.1.0 for the ten terminal-science EEG workflows; task data and graders are published, but the prepared guest image and reproducible provisioner are not yet available"
+    domain: eeg
+    image: ubuntu_eeglab.qcow2
+    default_port: 5150
+    container_prefix: osci_eeg
+    tools_probe: "command -v octave"
+    provision: null
+    pre_task_hooks: []
+    check_commands: [octave, python3, firefox, gedit, gnome-terminal]
+    window_classes:
+      octave: octave
+      gnome-terminal: terminal
+      xterm: terminal
+      firefox: firefox
+      gedit: gedit
+      nautilus: files
+
   ubuntu_qgis:
     description: "QGIS 3.44.13 LTR (pinned), profile `osworld`, screen 1920x1080, update check and notifications off"
     domain: geoscience

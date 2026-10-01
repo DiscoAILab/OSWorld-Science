@@ -192,6 +192,7 @@ cython_debug/
 #.idea/
 ### OSWorld-Science: large / derived / secret trees
 /data/
+/data.remote-extra-*/
 /vm/
 /runs/
 /tmp/

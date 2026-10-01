@@ -6,13 +6,13 @@
 
 *Can computer-use agents turn scientific intent into verifiable results inside real research software?*
 
-[![Paper](https://img.shields.io/badge/Paper-PDF-B31B1B?style=for-the-badge&logo=adobeacrobatreader&logoColor=white)](https://sciailab-osworld-science-page.static.hf.space/static/paper/OSWorld-Science.pdf)
+[![arXiv](https://img.shields.io/badge/arXiv-2609.39903-B31B1B?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/pdf/2609.39903)
 [![Project Page](https://img.shields.io/badge/Project-Page-2563EB?style=for-the-badge&logo=googlechrome&logoColor=white)](https://huggingface.co/spaces/SciAILab/osworld-science-page)
 [![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Dataset-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black)](https://huggingface.co/datasets/SciAILab/OSWorld-Science-data)
-[![Tasks](https://img.shields.io/badge/Benchmark-146%20Tasks-8B5CF6?style=for-the-badge)](https://sciailab-osworld-science-page.static.hf.space/static/paper/OSWorld-Science.pdf)
+[![Tasks](https://img.shields.io/badge/Benchmark-146%20Tasks-8B5CF6?style=for-the-badge)](https://arxiv.org/pdf/2609.39903)
 [![License](https://img.shields.io/badge/License-CC%20BY%204.0-EF9421?style=for-the-badge&logo=creativecommons&logoColor=white)](LICENSE)
 
-[**Paper**](https://sciailab-osworld-science-page.static.hf.space/static/paper/OSWorld-Science.pdf) ·
+[**Paper**](https://arxiv.org/pdf/2609.39903) ·
 [**Project page**](https://huggingface.co/spaces/SciAILab/osworld-science-page) ·
 [**Dataset & VM images**](https://huggingface.co/datasets/SciAILab/OSWorld-Science-data) ·
 [**Documentation**](docs/README.md)
@@ -258,7 +258,7 @@ If OSWorld-Science is useful in your work, please cite the paper:
   author = {Dai, Dingyuan and Qi, Heli and Liu, Lei and Li, Yinxi and Chen, Baiding and Dou, Zijun and Zeng, Qingcheng and Kang, Qi and Sun, Oliver and Wang, Eric and Zhou, Bo and Wang, Haixin and Du, Yufan and Bo, Shi and Lin, Ruihan and Yuan, Mengqi and Lu, Dunjie and Dillmann, Steven and Shi, Yiming and Su, Tina and Xin, Xin and Liu, Minghao and Wang, Xi and Huang, Xu and Zhang, Ge and Nie, Pengyu and Yang, Zhen and Tang, Jie and Li, Juanzi and Xuan, Weihao and Liu, Tianyu},
   year   = {2026},
   note   = {Preprint},
-  url    = {https://sciailab-osworld-science-page.static.hf.space/static/paper/OSWorld-Science.pdf}
+  url    = {https://arxiv.org/pdf/2609.39903}
 }
 ```
 
@@ -270,7 +270,7 @@ vendored components remain subject to their respective licenses.
 
 <div align="center">
 
-**[Read the paper](https://sciailab-osworld-science-page.static.hf.space/static/paper/OSWorld-Science.pdf)**
+**[Read the paper](https://arxiv.org/pdf/2609.39903)**
 · **[Explore the project](https://huggingface.co/spaces/SciAILab/osworld-science-page)**
 · **[Download the data](https://huggingface.co/datasets/SciAILab/OSWorld-Science-data)**
 

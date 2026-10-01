@@ -11,6 +11,7 @@ def test_task_count_and_domains(taskset):
     assert taskset.domains() == ["biomed", "chem", "eeg", "geoscience", "linguistics", "physics", "stat"]
     assert len(taskset.ids("stat")) == 20
     assert len(taskset.ids("linguistics")) == 2
+    assert len(taskset.ids("eeg")) == 10                                         # ten EEGLAB terminal-science tasks (Octave + EEGLAB 2025.1.0)
     assert len(taskset.ids("biomed")) == 34 and len(taskset.ids("chem")) == 43  # 23 QuPath + 8 structural biology/NMR + 3 radiology; retro/struct/lenacapavir
     assert len(taskset.ids("eeg")) == 10                                      # EEGLAB terminal-science workflows
     assert len(taskset.ids("geoscience")) == 6                                  # six QGIS remote sensing tasks

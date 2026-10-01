@@ -19,7 +19,8 @@ scripts/vm_prep/
 ├── physics/      provision_guest.sh (OpenFOAM + ParaView)
 ├── geoscience/   QGIS image verification helpers
 ├── radiology/    provision_guest.sh → weasis_setup.py + slicer_setup.py + slicer_firstrun.sh
-└── linguistics/  provision_guest.sh → praat_setup.py
+├── linguistics/  provision_guest.sh → praat_setup.py
+└── eeg/          provision_guest.sh (apt octave + octave-signal/statistics, git clone EEGLAB 2025.1.0 → /opt/eeglab)
 ```
 
 The 10 EEGLAB tasks are published under `data/eeg`, but an
@@ -35,6 +36,7 @@ scripts/vm_prep/base/download_base.sh
 scripts/vm_prep/stat/build_image.sh          # ~30-60 min; port 5040 by default
 scripts/vm_prep/radiology/build_image.sh     # port 5050
 scripts/vm_prep/linguistics/build_image.sh   # port 5080
+scripts/vm_prep/eeg/build_image.sh           # port 5150
 ```
 
 Discipline: **reset, install, bake**. `osci vm bake` refuses a guest that

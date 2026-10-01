@@ -12,12 +12,21 @@ scripts/vm_prep/
 ├── base/download_base.sh          Hugging Face xlangai/ubuntu_osworld → vm/base/Ubuntu.qcow2
 ├── common/guest_run.py            run a long script inside the guest, detached, poll the .done flag
 ├── common/build_image.sh          start-from-base → provision → bake (called by each domain)
+├── astro/        prepare_episode.py (CIAO/DS9 pre-task state; image is stored under data/physics/vm)
 ├── stat/         provision_guest.sh (micromamba + statenv.lock), extras_guest.sh (growpart, RStudio,
 │                 python packages, ImageMagick), restore_firefox_profile.py, snapshot_firefox_profile.sh,
 │                 check_oda_home.py
+├── physics/      provision_guest.sh (OpenFOAM + ParaView)
+├── geoscience/   QGIS image verification helpers
 ├── radiology/    provision_guest.sh → weasis_setup.py + slicer_setup.py + slicer_firstrun.sh
 └── linguistics/  provision_guest.sh → praat_setup.py
 ```
+
+The 10 EEGLAB tasks are published under `data/eeg`, but an
+`ubuntu_eeglab.qcow2` image and reproducible `scripts/vm_prep/eeg/`
+provisioner are not yet available. The Ansys recipe travels with the dataset
+under `data/physics/vm/build_recipe/` because its Windows image cannot be
+redistributed and is not supported by the current runtime backend.
 
 Build an image:
 

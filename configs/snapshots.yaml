@@ -279,3 +279,24 @@ snapshots:
       gedit: gedit
       nautilus: files
       firefox: firefox
+  ubuntu_econ:
+    description: "Economics / financial econometrics: gretl (GUI gretl_x11 + gretlcli) and LibreOffice Calc on the OSWorld Ubuntu 22.04 base. Built by scripts/vm_prep/econ/build_image.sh (apt gretl 2022a-1 + libreoffice-calc; no network at run time by design). Reference values in data/econ were produced with gretl 2023c and re-derived with the jammy package gretl 2022a: every graded quantity and every alternative is identical. reference_private/ECON-001/make_gt.py re-derives them on the baked image."
+    domain: econ
+    image: ubuntu_econ.qcow2
+    default_port: 5160
+    container_prefix: osci_econ
+    tools_probe: "command -v gretlcli && command -v gretl && command -v libreoffice"
+    provision: scripts/vm_prep/econ/provision_guest.sh
+    pre_task_hooks: []
+    check_commands: [gretl, gretlcli, libreoffice, python3, gnome-terminal, gedit, firefox]
+    bake_cleanup: "pkill -x gretl_x11 2>/dev/null; pkill -x soffice.bin 2>/dev/null; rm -rf /home/user/work /home/user/assets /home/user/.gretl /home/user/.config/gretl /home/user/.config/libreoffice/4/user/registrymodifications.xcu.bak /home/user/.local/share/recently-used.xbel"
+    window_classes:
+      gretl_x11: gretl
+      libreoffice-calc: libreoffice
+      libreoffice: libreoffice
+      soffice: libreoffice
+      gnome-terminal: terminal
+      xterm: terminal
+      gedit: gedit
+      nautilus: files
+      firefox: firefox

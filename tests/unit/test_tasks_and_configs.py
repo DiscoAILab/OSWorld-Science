@@ -8,15 +8,16 @@ from osworld_science.vm.snapshots import SnapshotRegistry
 
 
 def test_task_count_and_domains(taskset):
-    assert taskset.domains() == ["biomed", "chem", "eeg", "geoscience", "linguistics", "physics", "stat"]
+    assert taskset.domains() == ["biomed", "chem", "econ", "eeg", "geoscience", "linguistics", "physics", "stat"]
     assert len(taskset.ids("stat")) == 20
     assert len(taskset.ids("linguistics")) == 2
     assert len(taskset.ids("eeg")) == 10                                         # ten EEGLAB terminal-science tasks (Octave + EEGLAB 2025.1.0)
     assert len(taskset.ids("biomed")) == 34 and len(taskset.ids("chem")) == 43  # 23 QuPath + 8 structural biology/NMR + 3 radiology; retro/struct/lenacapavir
     assert len(taskset.ids("eeg")) == 10                                      # EEGLAB terminal-science workflows
     assert len(taskset.ids("geoscience")) == 6                                  # six QGIS remote sensing tasks
+    assert len(taskset.ids("econ")) == 4                                        # ECON-001-GUI (term-structure cointegration), ECON-002/-GUI (monetary VAR), ECON-006-GUI (Card-Krueger DiD): gretl + LibreOffice Calc
     assert len(taskset.ids("physics")) == 31  # 14 OpenFOAM OF-xxx + 3 CIAO/DS9 chandra-* + 14 Ansys Fluent FT/FV-xxx
-    assert len(taskset) == 146
+    assert len(taskset) == 150
 
 
 def test_every_task_validates(taskset, settings):
@@ -54,6 +55,7 @@ def test_snapshots_config(settings):
     assert lic.applies_to(["mnova", "terminal"]) and not lic.applies_to(["pymol", "chrome"])
     assert reg["ubuntu_astro"].domain == "physics"
     assert reg["ubuntu_eeglab"].domain == "eeg" and reg["ubuntu_eeglab"].default_port == 5150
+    assert reg["ubuntu_econ"].domain == "econ" and reg["ubuntu_econ"].default_port == 5160
     assert reg["ansys_win10_fluent2026r1"].domain == "physics"
 
 

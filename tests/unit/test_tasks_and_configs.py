@@ -15,9 +15,9 @@ def test_task_count_and_domains(taskset):
     assert len(taskset.ids("biomed")) == 34 and len(taskset.ids("chem")) == 43  # 23 QuPath + 8 structural biology/NMR + 3 radiology; retro/struct/lenacapavir
     assert len(taskset.ids("eeg")) == 10                                      # EEGLAB terminal-science workflows
     assert len(taskset.ids("geoscience")) == 6                                  # six QGIS remote sensing tasks
-    assert len(taskset.ids("econ")) == 4                                        # ECON-001-GUI (term-structure cointegration), ECON-002/-GUI (monetary VAR), ECON-006-GUI (Card-Krueger DiD): gretl + LibreOffice Calc
+    assert len(taskset.ids("econ")) == 6                                        # ECON-001-GUI-A/B (term-structure cointegration), ECON-002 and ECON-002-GUI-A/B (monetary VAR), ECON-006-GUI (Card-Krueger DiD): gretl + LibreOffice Calc
     assert len(taskset.ids("physics")) == 31  # 14 OpenFOAM OF-xxx + 3 CIAO/DS9 chandra-* + 14 Ansys Fluent FT/FV-xxx
-    assert len(taskset) == 150
+    assert len(taskset) == 152
 
 
 def test_every_task_validates(taskset, settings):

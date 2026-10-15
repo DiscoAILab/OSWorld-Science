@@ -7,7 +7,7 @@
 *Can computer-use agents turn scientific intent into verifiable results inside real research software?*
 
 [![arXiv](https://img.shields.io/badge/arXiv-2609.39903-B31B1B?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2609.39903)
-[![Project Page](https://img.shields.io/badge/Project-Page-2563EB?style=for-the-badge&logo=googlechrome&logoColor=white)](https://huggingface.co/spaces/SciAILab/osworld-science-page)
+[![Project Page](https://img.shields.io/badge/Project-Page-2563EB?style=for-the-badge&logo=googlechrome&logoColor=white)](https://github.com/DiscoAILab/osworld-science-page)
 [![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Dataset-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black)](https://huggingface.co/datasets/SciAILab/OSWorld-Science-data)
 [![Tasks](https://img.shields.io/badge/Benchmark-146%20Tasks-8B5CF6?style=for-the-badge)](https://arxiv.org/pdf/2609.39903)
 [![License](https://img.shields.io/badge/License-CC%20BY%204.0-EF9421?style=for-the-badge&logo=creativecommons&logoColor=white)](LICENSE)

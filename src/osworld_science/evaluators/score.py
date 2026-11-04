@@ -3,6 +3,9 @@
 Scoring follows the task's own weights. A `stages` entry makes one check a
 gate: if it fails, every check from `blocks_from` on scores zero, because a
 number extracted from tampered inputs is not a partially correct number.
+Checks listed in `evaluator.required` must all pass for the task to PASS: if
+one scores below 1.0 the verdict is FAIL whatever the weighted total; the
+continuous score itself is not changed.
 """
 from __future__ import annotations
 
@@ -47,19 +50,31 @@ def grade(task: Task, gt: dict, submission: Path, ctx: EvalContext) -> dict:
         checks[i]["score"] = 0.0
 
     total = sum(c["weight"] * c["score"] for c in checks)
+    # `evaluator.required`: checks that must pass for the task to PASS (deliverable present,
+    # input-integrity gate, artifact checks). They usually carry zero weight, so without this
+    # step a missing required deliverable cost nothing and the task could still PASS. Any
+    # required check below 1.0 forces FAIL; the continuous score is left as the weights give
+    # it (the eeg grader suite pins "same score, FAIL" for a missing required analysis.m).
+    required = [int(i) for i in ev.get("required") or []]
+    required_failed = [i for i in required if checks[i]["score"] < 1.0]
     threshold = ev.get("pass_score", 1.0)
+    passed = not required_failed and total >= threshold - 1e-9
     return {
         "task": task.id,
-        "verdict": "PASS" if total >= threshold - 1e-9 else "FAIL",
+        "verdict": "PASS" if passed else "FAIL",
         "score": round(total, 6),
         "pass_score": threshold,
         "gate_blocked": sorted(blocked),
+        "required": required,
+        "required_failed": required_failed,
         "checks": checks,
     }
 
 
 def format_report(res: dict) -> str:
     lines = [f"{res['task']}: {res['verdict']}  score {res['score']:.4f} / {res['pass_score']:g}"]
+    if res.get("required_failed"):
+        lines.append(f"  required check(s) failed: {res['required_failed']} -> FAIL")
     for c in res["checks"]:
         mark = "ok  " if c["score"] == 1.0 else ("FAIL" if c["score"] == 0 else "part")
         lines.append(f"  [{mark}] w={c['weight']:.2f} {c['score']:.3f}  {c['label']}")

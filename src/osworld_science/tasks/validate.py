@@ -67,6 +67,14 @@ def validate_task(task: Task, evaluator_names: set[str] | None = None,
             errs.append(f"stage gate {g!r} is not a check index")
         if not (isinstance(b, int) and 0 <= b <= n):
             errs.append(f"stage blocks_from {b!r} out of range")
+    req = ev.get("required")
+    if req is not None:
+        if not isinstance(req, list):
+            errs.append("evaluator.required must be a list of check indices")
+        else:
+            for r in req:
+                if not (isinstance(r, int) and not isinstance(r, bool) and 0 <= r < n):
+                    errs.append(f"evaluator.required entry {r!r} is not a check index")
     results = task.results
     for r in results:
         if r.type not in RESULT_TYPES:

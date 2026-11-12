@@ -26,6 +26,8 @@ scripts/vm_prep/
 ├── eeg/          provision_guest.sh (in-guest script: apt octave + octave-signal/statistics,
 │                 git clone EEGLAB 2025.1.0 → /opt/eeglab)
 ├── econ/         provision_guest.sh → econ_setup.py (apt gretl 2022a + libreoffice-calc; LibreOffice first-run dialogs off)
+├── econ_gui/     build_image.sh → install_econ_gui.sh (ubuntu_econ_gui: Ubuntu 24.04 + Xfce, JDemetra+/GeoDa/
+│                 Portfolio Performance/NetLogo, GUI-only; KVM build from the cloud image as physics/xfce)
 └── profex/       provision_guest.sh → install_guest.sh + prepare_runtime.sh + profex_setup.py (Profex 5.7.2 + BGMN)
 ```
 
@@ -47,6 +49,7 @@ scripts/vm_prep/radiology/build_image.sh     # port 5050
 scripts/vm_prep/linguistics/build_image.sh   # port 5080
 scripts/vm_prep/linguistics/build_rkward_image.sh   # ~15 min; port 5160; then move vm/images/ubuntu_rkward.* to data/linguistics/vm/
 scripts/vm_prep/econ/build_image.sh          # port 5170
+scripts/vm_prep/econ_gui/build_image.sh      # ~40 min; port 5190; KVM build from the Ubuntu 24.04 cloud image
 scripts/vm_prep/profex/build_image.sh        # port 5180
 ```
 

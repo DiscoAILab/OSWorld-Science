@@ -1,0 +1,5 @@
+FROM osci-econ-gui:pp
+USER root
+COPY grader/PPRef2.class /opt/grader/ppref/PPRef2.class
+RUN chown -R root:root /opt/grader && chmod 700 /opt/grader
+USER user

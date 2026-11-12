@@ -14,12 +14,12 @@ def test_task_count_and_domains(taskset):
     # fixed-recording vowel duration (Praat, RKWard, Writer)
     assert len(taskset.ids("linguistics")) == 4
     assert len(taskset.ids("biomed")) == 34 and len(taskset.ids("chem")) == 53  # 23 QuPath + 8 structural biology/NMR + 3 radiology; retro/struct/lenacapavir + 10 atropo_*
-    assert len(taskset.ids("econ")) == 6                                        # gretl + LibreOffice Calc econometrics (ECON-*)
+    assert len(taskset.ids("econ")) == 26                                       # gretl + LibreOffice Calc econometrics (6 ECON-*) + GUI-only research software ECON-040 … ECON-059 (JDemetra+, GeoDa, Portfolio Performance, NetLogo)
     assert len(taskset.ids("eeg")) == 10                                      # EEGLAB terminal-science workflows
     assert len(taskset.ids("geoscience")) == 6                                  # six QGIS remote sensing tasks
     assert len(taskset.ids("physics")) == 31  # 14 OpenFOAM OF-xxx + 3 CIAO/DS9 chandra-* + 14 Ansys Fluent FT/FV-xxx
     # the 162 of the published dataset (two of them linguistics) + the local-only linguistics labs counted above
-    assert len(taskset) - len(taskset.ids("linguistics")) == 160
+    assert len(taskset) - len(taskset.ids("linguistics")) == 180   # + the 20 GUI-software econ tasks
 
 
 def test_every_task_validates(taskset, settings):
@@ -63,6 +63,8 @@ def test_snapshots_config(settings):
     assert econ.provision == "scripts/vm_prep/econ/provision_guest.sh" and (settings.repo_root / econ.provision).is_file()
     ports = [reg[n].default_port for n in reg.names()]
     assert econ.default_port == 5170 and len(ports) == len(set(ports))   # no two snapshots share a default port
+    gui = reg["ubuntu_econ_gui"]                                   # built from the Ubuntu 24.04 cloud image by scripts/vm_prep/econ_gui/build_image.sh
+    assert gui.domain == "econ" and gui.default_port == 5190 and gui.provision is None
     assert reg["ansys_win10_fluent2026r1"].domain == "physics"
 
 

@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+DEFAULT_MAX_FILES = 50        # a vm_glob result that does not say `max_files`
+
 
 @dataclass(frozen=True)
 class ConfigStep:
@@ -16,11 +18,13 @@ class ConfigStep:
 
 @dataclass(frozen=True)
 class ResultSpec:
-    type: str                 # vm_file | vm_command_line
-    path: str                 # vm_file: guest absolute path ("" for a command line)
-    dest: str                 # submission-relative path (a command line's stdout+stderr land here)
+    type: str                 # vm_file | vm_command_line | vm_glob
+    path: str                 # vm_file: guest absolute path; vm_glob: guest pattern ("" for a command line)
+    dest: str                 # submission-relative path (a command line's stdout+stderr land here;
+                              # a vm_glob's matches land in this directory under their own names)
     command: tuple[str, ...] = ()   # vm_command_line: argv run inside the guest
     timeout: int = 120              # vm_command_line: seconds
+    max_files: int = DEFAULT_MAX_FILES  # vm_glob: at most this many matches are pulled
 
 
 @dataclass(frozen=True)
@@ -72,12 +76,20 @@ class Task:
         return [ResultSpec(type=str(r.get("type", "")), path=str(r.get("path") or ""),
                            dest=str(r.get("dest") or ""),
                            command=tuple(str(c) for c in (r.get("command") or [])),
-                           timeout=int(r.get("timeout", 120)))
+                           timeout=int(r.get("timeout", 120)),
+                           max_files=int(r.get("max_files", DEFAULT_MAX_FILES)))
                 for r in (self.evaluator.get("result") or [])]
 
     @property
     def bench(self) -> dict[str, Any]:
         return dict(self.raw.get("bench") or {})
+
+    @property
+    def judge(self) -> dict[str, Any] | None:
+        """`{"module": <private path>, "func": <name>}`: a reviewer that `osci judge` can
+        run when the grader reports a pending check. None for tasks graded by code alone."""
+        j = self.raw.get("judge")
+        return dict(j) if isinstance(j, dict) and j.get("module") else None
 
     def prompt(self) -> str:
         """The instruction as the legacy sweeps sent it: instruction plus a

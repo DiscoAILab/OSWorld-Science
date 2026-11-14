@@ -22,6 +22,8 @@ the only hosting route implemented; the requirements below follow from it.
 | outbound HTTPS from the host | model endpoints, Hugging Face (data, base image), Docker Hub | `curl -sI https://huggingface.co` |
 | `Rscript` (R 4.4.3) on the host | the three R-backed statistics evaluators (`r_syntax`, `r_function_probe`, `shiny_app_check`) | `OSCI_RSCRIPT` in `.env`; `scripts/grading_env/README.md` |
 | the `osworld-openfoam-guest:v2512-pv5.11.2` Docker image (4.9 GB) on the host | the `physics` grader, which re-runs OpenFOAM on every submission inside that image | `docker image inspect osworld-openfoam-guest:v2512-pv5.11.2`; build context in `scripts/vm_prep/physics/files/` |
+| the R judge image (0.5 GB), built on the host by `scripts/vm_prep/linguistics/build_r_judge.sh`, and `uv sync --extra linguistics` | the `hoosier_phonotactics_lab1` grader, which replays the submitted R function in a networkless container and reads the report PDF | `docker image inspect osworld-science/hoosier-r-judge:local`; without it the task's cells stay pending |
+| `uv sync --extra linguistics` (pypdf, PyMuPDF, numpy, matplotlib, Pillow) | the `vowel_duration_fixed_lab2` grader, which renders the report pages, the plot and a waveform/spectrogram card per recording for the reviewer; it executes nothing from the submission | `uv run --extra linguistics python -c "import pymupdf, matplotlib"`; without it the task's cells stay pending |
 | outbound network **from the guest** only while building images | apt, conda-forge, posit, GitHub, slicer.org during `scripts/vm_prep/*/build_image.sh`; runs do not need it | — |
 
 Not required: a GPU (the guests use software rendering; 3D Slicer runs on

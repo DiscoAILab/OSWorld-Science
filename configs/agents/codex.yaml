@@ -1,0 +1,112 @@
+# OpenAI Codex CLI as the harness (agents/codex): one `codex exec --json` per cell, driven by the
+# installed `codex` binary against the model's own backend. Codex keeps its loop, prompts, context
+# compaction and retries; the benchmark desktop is handed to it as an MCP server
+# (agents/codex/desktop_mcp.py) whose GUI tools run through the same PyAutoGUI driver as
+# openai-cua. Every run gets its own CODEX_HOME under <cell>/agent/codex_home with a generated
+# config.toml (agents/codex/codex_config.py), so ~/.codex is never read. Keys below map onto that
+# file where noted.
+agent: codex
+
+# Codex removed its chat wire API: `responses` is the only value this agent accepts, so the
+# backend must serve /responses (Azure/OpenAI v1, OpenRouter). Anthropic, Google's and
+# DashScope's compatible endpoints and Moonshot's API cannot run it.
+api: responses
+
+# The executable: a name on PATH or an absolute path (npm install -g @openai/codex, or a release
+# binary). `osci preflight` reports its version and runs one text turn through it.
+codex_bin: codex
+
+# ── authentication ──
+# env_key  = the backend's key from .env, exported to codex under the backend's key_env and
+#            named in the generated model_providers.osci entry (the normal, cost-tracked route)
+# chatgpt  = reuse the ChatGPT login in ~/.codex/auth.json (copied into the run's CODEX_HOME) and
+#            Codex's built-in `openai` provider: the backend/base_url of configs/models.yaml is
+#            then bypassed and the model_id must be one Codex knows. Experimental.
+auth: env_key
+
+# ── reasoning (config.toml model_reasoning_effort / model_reasoning_summary / model_verbosity) ──
+# OSCI_REASONING_EFFORT overrides reasoning_effort. Codex's own default would be the catalog's
+# per-model level (low for gpt-5.6-sol!); medium matches the other agents. Values Codex accepts:
+# minimal | low | medium | high | xhigh (| max | ultra on models that list them). Summary:
+# auto | concise | detailed | none (the summaries are what trace.jsonl records as cua_reasoning).
+reasoning_effort: medium
+reasoning_summary: auto
+verbosity: null                      # low | medium | high (text.verbosity); null = not sent
+service_tier: null                   # default | flex | priority; null = not sent
+
+# ── the desktop tools (mcp_servers.desktop) ──
+# Every GUI tool (click, type, scroll, …) answers with a fresh screenshot, the protocol openai-cua
+# uses with function tools; false makes them answer with text, and the model must call
+# `screenshot` itself (fewer images in the history, less to look at).
+screenshot_after_action: true
+# `_meta.codex/imageDetail` on each returned screenshot: auto | low | high | original | none
+# (none = let Codex pick its default). `original` is only honoured on routes that support it.
+screenshot_detail: high
+# Downscale screenshots so the long edge is at most this many pixels before they go to the
+# model (coordinates are scaled back; shots/cua_NNN.png keep full size). null = send as is.
+screenshot_max_edge: null
+# A `run_command` tool that runs `bash -lc` inside the guest (the kimi agent's RUN_COMMAND, what
+# a coding agent expects to have). false = GUI tools only, like openai-cua/claude-cua.
+guest_shell: true
+guest_command_timeout: 120           # the guest's /execute cannot run a command longer than this
+guest_output_limit: 20000            # characters of stdout/stderr returned per command
+# The screenshot of the desktop at the start is attached to the task message (`codex exec -i`).
+seed_screenshot: true
+mcp_startup_timeout_s: 60
+mcp_tool_timeout_s: 600
+
+# ── Codex's own tools, on THIS host ──
+# Codex's shell tools (features shell_tool / unified_exec) run on the machine osci runs on, not on
+# the desktop. Off by default: the model would otherwise spend turns on a host that has none of
+# the task's files. When on, they are confined by sandbox_mode in an empty workspace directory.
+host_shell: false
+sandbox_mode: read-only              # read-only | workspace-write | danger-full-access (host tools only)
+# Codex's hosted web search (config.toml web_search): disabled | cached | indexed | live. The
+# benchmark is offline; keep it disabled unless a comparison wants it.
+web_search: disabled
+# Further feature flags for the generated [features] table (`codex features list` prints them);
+# e.g. {view_image: false} to drop the local image viewer, {sleep_tool: false}. `plugins: false`
+# stops Codex from cloning its curated plugin marketplace (a 94 MB git checkout fetched from
+# GitHub) into every cell's CODEX_HOME at start-up; nothing in a benchmark run uses plugins.
+features: {plugins: false}
+
+# ── history and context ──
+# Codex owns its history: there is no screenshot window here. Its context compaction kicks in at
+# model_auto_compact_token_limit tokens (null = Codex's default for the model, about 90 % of the
+# context window). Note: Azure rejects a request with more than 50 images, and every screenshot
+# is one; a long GUI task on Azure needs compaction well before that, so set this to roughly
+# 40 screenshots' worth (about 60000 with 1080p screenshots at detail high) or lower
+# screenshot_max_edge / switch screenshot_after_action off.
+model_auto_compact_token_limit: 60000
+model_context_window: null           # null = the catalog's value (272000 for the gpt-5.6 family)
+tool_output_token_limit: null        # cap on each tool output kept in the context; null = Codex's default
+# The `<environment_context>` block Codex would inject describes the HOST (cwd, sandbox, shell),
+# which is not the machine the task is on; off unless host_shell is on.
+include_environment_context: false
+
+# ── the run ──
+# false keeps Codex's rollout (CODEX_HOME/sessions/…/rollout-*.jsonl): the full transcript, and
+# the per-model-call token counts the cost tables use (usage_source: rollout_token_count). true
+# runs `codex exec --ephemeral`: nothing persists, only the turn total is counted.
+ephemeral: false
+# `codex exec --strict-config`: fail on config keys this Codex version does not know (useful once
+# to check the generated file against a new release; off so a newer key never stops a sweep).
+strict_config: false
+turn_timeout_s: 7200                 # wall-clock cap on the whole codex exec; the cell then fails as predict_error
+preflight_timeout_s: 240
+# Provider-side retries (model_providers.osci.*): Codex's own, per request / per stream.
+request_max_retries: 4
+stream_max_retries: 5
+stream_idle_timeout_ms: 300000
+# Context compaction protocol for the custom provider, written as model_providers.osci.capabilities:
+# unsupported = compact locally (Azure and OpenRouter do not serve Codex's remote compaction), v2 =
+# send compaction_trigger items. null = do not write the key: Codex 0.156 and earlier reject
+# `capabilities` as unknown (they compact custom providers locally anyway).
+remote_compaction: null
+
+# ── escape hatches ──
+# developer_instructions: |          # replaces the built-in developer message (agents/codex/agent.py)
+# developer_instructions_suffix: ""  # appended to it
+# provider_overrides: {}             # merged into model_providers.osci (e.g. query_params, http_headers)
+# config_overrides: {}               # merged last into the whole config.toml, e.g.
+#   {model_providers: {osci: {query_params: {api-version: preview}}}, features: {memories: false}}

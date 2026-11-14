@@ -1,0 +1,106 @@
+# Claude computer use (agents/claude_cua): the Anthropic Messages API with the computer
+# toolset, every member run in the guest through PyAutoGUI. Built on the SDK's
+# BetaAbstractComputerToolset20260801 and the loop of Anthropic's reference implementations.
+agent: claude-cua
+
+# The only API this agent speaks; the model must be on an anthropic_messages backend.
+api: messages
+
+# toolset           = computer_toolset_20260801 (GA, no beta header; Claude 5.5+ accept only this
+#                     on the Claude API / Google Cloud)
+# computer_20251124 = the earlier single `computer` tool with its beta header, for routes
+#                     (Bedrock, Foundry, some proxies) that do not serve the toolset yet
+# computer_20250124 = the version before that (no zoom)
+# `osci preflight` sends one request with the configured version and reports whether the
+# route answers with a computer call.
+tool_version: toolset
+
+# Members withheld from the model (`configs: {<member>: {enabled: false}}`); e.g. [zoom].
+disabled_members: []
+
+# ── screenshots ──
+# Every screenshot is resized (aspect kept) so that the long edge is <= max_edge_px and
+# ⌈w/28⌉×⌈h/28⌉ <= max_image_tokens, the limits of Claude 4.7 and later (earlier models:
+# 1568 / 1568). A 1920×1080 guest is sent unscaled; otherwise coordinates are scaled back.
+max_edge_px: 2576
+max_image_tokens: 4784
+px_per_token: 28
+# How screenshots and zooms are encoded:
+#   webp  lossless WebP: decodes to exactly the pixels of the PNG at about 60 % of its size on
+#         desktop screenshots (2026-10-12, 108 screenshots of a stat run: 60 % on average, 50-80 %
+#         per task at webp_method 4), so 1.7x as many fit under max_request_mb.
+#         image/webp is a supported image type.
+#   png   what the PromptAgent sends (and claude-cua did until 2026-10-12)
+#   jpeg  lossy, about a third of PNG (jpeg_quality); text gets compression artifacts
+image_format: webp
+# libwebp effort 0..6 for the lossless encoder, per 1080p screenshot on that run: 4 = 60 % of PNG
+# in about 2 s, 6 = 50 % in about 15 s, 0 = the fastest (0.3 s) and somewhat larger than 4.
+# PNG optimize itself takes 1-1.6 s.
+webp_method: 4
+jpeg_quality: 75
+# How a zoom crop is magnified to fit the frame:
+#   integer  the largest whole factor k that fits, nearest-neighbour: every screen pixel becomes a
+#            k×k block, so the zoom holds exactly the screen's pixels (a 730×460 region: 2×, 1460×920),
+#            and is about a quarter of the bytes of an interpolated one
+#   fit      fill the frame with LANCZOS interpolation, as the reference implementation does
+zoom_resize: fit
+# The harness's first screenshot is attached to the instruction (text first, then the image),
+# so the model sees the screen on turn 1 without spending a call on `screenshot`.
+seed_screenshot: true
+# When a batch does not end with a screenshot or zoom, the current screen is attached to the
+# last result of the batch (Anthropic's recommendation: Claude always sees the current state).
+screenshot_after_batch: true
+
+# ── history ──
+# Screenshot window, the same setting as in prompt.yaml (see there for limit / keep / prune).
+# Every image the model is sent counts: tool-result screenshots and zooms, and the seed
+# screenshot next to the instruction; a pruned one becomes "[Image Omitted]".
+#   keep = limit - 1  a sliding window, one image leaves per turn (limit 6 / keep 5: the
+#                     PromptAgent's window). Cache-hostile: the prefix changes every turn, so
+#                     with prompt_caching nearly every turn re-writes the cache at 1.25x `in`.
+#   keep < limit - 1  pruning only every limit - keep turns; between prunes the prefix is
+#                     byte-stable and the cache is read back (keep 5 / limit 30 = the reference
+#                     loop's interval pruning with interval 25).
+# null = never prune (context and cost grow without bound; the tunnel routes reject bodies
+# over ~20 MB). With client-side pruning and thinking on (adaptive/extended), Claude 5.5+
+# loses the thinking produced since the pruned screenshot; prefer `context_management`
+# (server-side clearing) or thinking: default/disabled in that case.
+screenshot_window:
+  limit: 8
+  keep: 4
+  prune: drop_oldest
+# A serialized request above this many MB is pruned at once by the window's algorithm to two
+# earlier screenshots + the newest, whatever the limit (the Bedrock-backed tunnel rejects bodies
+# over 20 MiB). null = no cap.
+max_request_mb: 18
+# Server-side context editing, sent as `context_management` with its beta header, e.g.
+#   {edits: [{type: clear_tool_uses_20250919, trigger: {type: tool_uses, value: 30},
+#             keep: {type: tool_uses, value: 5}}]}
+# null = none.
+context_management: null
+# Extra beta headers to send.
+betas: []
+
+# ── reasoning ──
+# default  = send no thinking parameter (the provider default, like the other arms)
+# disabled = thinking: {type: disabled}
+# adaptive = thinking: {type: adaptive} + output_config: {effort: thinking_effort}
+#            (OSCI_REASONING_EFFORT overrides thinking_effort)
+# extended = thinking: {type: enabled, budget_tokens: thinking_budget}
+thinking: default
+thinking_effort: medium
+thinking_budget: 8192
+
+# ── requests ──
+# cache_control on the system prompt and the last 3 tool results (one breakpoint per turn).
+prompt_caching: true
+request_timeout: 300
+api_retry_max_attempts: 5          # 429 / 5xx / overloaded / connection errors, exponential back-off
+empty_response_retry_max: 3        # an empty or cut-off reply gets a "continue" nudge this many times
+verify_ssl: true
+
+# ── guest ──
+max_wait_s: 60                     # cap on `wait` and `hold_key` durations
+type_chunk_chars: 400              # `type` is sent in chunks (the guest's /execute has a 90 s limit)
+# system_prompt: |                 # replaces the built-in system prompt
+# system_prompt_suffix: ""         # appended to it

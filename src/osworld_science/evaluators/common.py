@@ -1,9 +1,10 @@
 """Evaluators shared by every domain: json_fields, csv_table,
-protected_inputs_hash, artifact. Ported from the legacy checks.py; the
-flattened-input fallback in protected_inputs_hash comes from the radiology
-suite and is a superset of the stat behaviour."""
+protected_inputs_hash, artifact, artifact_glob. Ported from the legacy
+checks.py; the flattened-input fallback in protected_inputs_hash comes from
+the radiology suite and is a superset of the stat behaviour."""
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import re
 from pathlib import Path
@@ -157,3 +158,52 @@ def artifact(sub: Path, params: dict, gt: dict, ctx: EvalContext):
                 continue
         results.append({"field": name, "pass": True, "detail": f"{size:,} bytes"})
     return summarise(results)
+
+
+@register("artifact_glob")
+def artifact_glob(sub: Path, params: dict, gt: dict, ctx: EvalContext):
+    """Enough files of the right kind were collected into a directory (a `vm_glob` result),
+    for deliverables whose names the solver chooses: N screenshots, any names.
+
+    params: dir        submission-relative directory (the vm_glob's `dest`)
+            pattern    file-name pattern, default "*" (matched without regard to case)
+            min_count  files that must qualify, default 1
+            min_bytes  smaller files are stubs and do not qualify, default 1
+            kind       "png" | "pdf": the file must start with that signature
+            distinct   true: byte-identical files count once
+    Score: qualifying files / min_count, capped at 1. The content is not looked at.
+    """
+    rel = str(params["dir"]).rstrip("/")
+    base = sub / rel
+    need = max(1, int(params.get("min_count", 1)))
+    min_bytes = int(params.get("min_bytes", 1))
+    kind = params.get("kind")
+    pattern = str(params.get("pattern", "*")).lower()
+    if not base.is_dir():
+        return 0.0, {"error": f"{rel}/ was not collected from the guest", "checked": 0,
+                     "passed": 0, "min_count": need}
+    files = sorted(p for p in base.iterdir()
+                   if p.is_file() and fnmatch.fnmatchcase(p.name.lower(), pattern))
+    seen: dict[str, str] = {}
+    fails = []
+    passed = 0
+    for p in files:
+        data = p.read_bytes()
+        if len(data) < min_bytes:
+            fails.append({"field": p.name, "detail": f"only {len(data)} bytes (need {min_bytes})"})
+            continue
+        if kind in _MAGIC and not data.startswith(_MAGIC[kind]):
+            fails.append({"field": p.name, "detail": f"not a {kind.upper()} file"})
+            continue
+        if params.get("distinct"):
+            digest = hashlib.sha256(data).hexdigest()
+            if digest in seen:
+                fails.append({"field": p.name, "detail": f"identical to {seen[digest]}"})
+                continue
+            seen[digest] = p.name
+        passed += 1
+    if passed < need:
+        fails.insert(0, {"field": f"{rel}/{params.get('pattern', '*')}",
+                         "detail": f"{passed} qualifying file(s), need {need}"})
+    return min(1.0, passed / need), {"checked": len(files), "passed": passed, "min_count": need,
+                                     "failures": fails[:40], "n_failures": len(fails)}

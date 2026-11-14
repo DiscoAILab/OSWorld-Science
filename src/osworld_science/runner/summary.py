@@ -9,13 +9,17 @@ from pathlib import Path
 
 TOKEN_KEYS = ("input_tokens", "output_tokens", "total_tokens", "n_llm_calls")
 ENTRY_KEYS = ("status", "steps_used", "duration_s", "input_tokens", "output_tokens",
-              "total_tokens", "cached_input_tokens", "n_llm_calls", "cost_usd",
-              "upstream_cost_usd", "apps_seen")
+              "total_tokens", "cached_input_tokens", "cache_write_tokens", "reasoning_tokens",
+              "cache_hit_rate", "n_llm_calls", "cost_usd", "cost_source", "n_calls_cost_estimated",
+              "cost_usd_static", "upstream_cost_usd", "apps_seen")
 
 
 def _blank_bucket() -> dict:
     return {"runs": 0, "runs_finished": 0, "input_tokens": 0, "output_tokens": 0,
-            "total_tokens": 0, "n_llm_calls": 0, "cost_usd": 0.0}
+            "total_tokens": 0, "n_llm_calls": 0, "cost_usd": 0.0,
+            # cache: reads/writes summed over the cells whose API reported a cache at all
+            "cached_input_tokens": 0, "cache_write_tokens": 0, "input_tokens_cache_reported": 0,
+            "cache_hit_rate": None, "cost_usd_static": 0.0, "upstream_cost_usd": 0.0}
 
 
 def _accumulate(bucket: dict, entry: dict) -> None:
@@ -33,6 +37,15 @@ def _accumulate(bucket: dict, entry: dict) -> None:
         bucket["cost_usd"] = round(bucket["cost_usd"] + cost, 6)
     elif tok_in or tok_out:
         bucket["cost_usd_incomplete"] = True  # tokens without a price: the total is a lower bound
+    for key in ("cost_usd_static", "upstream_cost_usd"):
+        if isinstance(entry.get(key), (int, float)):
+            bucket[key] = round(bucket[key] + entry[key], 6)
+    if entry.get("cache_hit_rate") is not None:       # the API reported a cache for this cell
+        bucket["cached_input_tokens"] += int(entry.get("cached_input_tokens") or 0)
+        bucket["cache_write_tokens"] += int(entry.get("cache_write_tokens") or 0)
+        bucket["input_tokens_cache_reported"] += tok_in
+        if bucket["input_tokens_cache_reported"]:
+            bucket["cache_hit_rate"] = round(bucket["cached_input_tokens"] / bucket["input_tokens_cache_reported"], 4)
 
 
 def recompute_totals(s: dict) -> None:

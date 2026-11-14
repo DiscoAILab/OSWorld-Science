@@ -1,0 +1,51 @@
+# OpenAI Agents SDK computer use (agents/openai_cua): the SDK owns the tool loop, each
+# action is executed in the guest through PyAutoGUI and answered with a fresh screenshot.
+agent: openai-cua
+
+# The SDK drives the Responses API (OpenAIResponsesModel); image tool results do not travel
+# over chat/completions, so `responses` is the only value this agent accepts. The backend's
+# base_url must therefore serve /responses (Azure/OpenAI v1, OpenRouter).
+api: responses
+
+# native_computer = the built-in `computer` tool (computer_call / computer_call_output)
+# function_tools  = computer_* function tools returning the screenshot as input_image
+# auto            = native_computer when the backend is one of `native_computer_backends`,
+#                   function_tools elsewhere; a model may still pin `native_computer_tool:
+#                   true|false` in configs/models.yaml.
+tool_protocol: auto
+native_computer_backends: [openai, azure]
+
+# Reasoning sent with every request. OSCI_REASONING_EFFORT overrides the effort when set;
+# the summary is what the SDK records of the model's reasoning (none | auto | concise | detailed).
+reasoning_effort: medium
+reasoning_summary: detailed
+
+# ModelSettings passed to the SDK.
+tool_choice: required                # the model must act or finish through a tool each turn
+parallel_tool_calls: false           # one GUI action per turn, so every screenshot is attributable
+truncation: auto                     # let the API drop old context instead of failing the run
+
+# Screenshot window, the same setting as in prompt.yaml (see there for limit / keep / prune),
+# applied to the SDK transcript before every model call. A pruned screenshot keeps its call and
+# the reasoning item before it; only the image is replaced by a one-line text (a text output
+# for function tools, an `input_text` output for the native computer tool), so the model
+# still sees every earlier action and its reasoning, as with the other agents (the SDK's own
+# transcript keeps everything). Needed: Azure rejects a request with more than 50 images and
+# the context grows without it. limit 6 / keep 5 = the PromptAgent's window; null = send the
+# whole transcript.
+screenshot_window:
+  limit: 8
+  keep: 4
+  prune: drop_oldest
+
+# `detail` on the screenshots returned by the function tools (the native tool has no knob).
+image_detail: high
+
+# Seconds per request in the OpenAI client.
+request_timeout: 300
+
+# Tries per model call, the same request each time, 10 s / 20 s / 30 s apart: the rule the
+# other agents' caller follows (no larger token budget and no shorter input on a retry). An HTTP
+# error, a dropped connection and a response that ends incomplete (Azure's content_filter,
+# max_output_tokens) all count. The OpenAI client's own retries are off, so 4 = 4 requests at most.
+request_attempts: 4

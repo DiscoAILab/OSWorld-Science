@@ -7,7 +7,9 @@ import importlib
 from collections.abc import Callable
 
 _REGISTRY: dict[str, Callable] = {}
-_BUILTIN = ("osworld_science.agents.prompt_agent", "osworld_science.agents.kimi")
+_BUILTIN = ("osworld_science.agents.prompt_agent", "osworld_science.agents.kimi",
+            "osworld_science.agents.openai_cua", "osworld_science.agents.claude_cua",
+            "osworld_science.agents.codex")
 _loaded = False
 
 
@@ -31,6 +33,23 @@ def load_builtin() -> None:
     except Exception:  # noqa: BLE001
         pass
     _loaded = True
+
+
+_PREFLIGHT: dict[str, Callable] = {}
+
+
+def register_agent_preflight(name: str):
+    """Decorator for an agent-specific endpoint probe `fn(model, agent_config, log) -> (ok, why)`,
+    run after the generic text+image probe (e.g. "does this route serve the computer toolset?")."""
+    def deco(fn: Callable) -> Callable:
+        _PREFLIGHT[name] = fn
+        return fn
+    return deco
+
+
+def get_agent_preflight(name: str) -> Callable | None:
+    load_builtin()
+    return _PREFLIGHT.get(name)
 
 
 def get_agent_factory(name: str) -> Callable:

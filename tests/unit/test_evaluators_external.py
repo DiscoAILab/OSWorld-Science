@@ -146,7 +146,7 @@ def test_vm_command_line_results_validate_and_collect(tmp_path):
     class FakeGuest:
         port = 1
 
-        def alive(self):
+        def alive(self, require_display=True):
             return True
 
         def execute(self, command, timeout):

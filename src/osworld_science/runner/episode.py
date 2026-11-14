@@ -64,6 +64,7 @@ def run_episode(agent: AgentBase, task: Task, controller: DesktopController, gue
     instruction = task.prompt()
     (run_dir / "prompt_sent.txt").write_text(instruction, encoding="utf-8")
     trace = TraceLog(run_dir / "trace.jsonl")
+    agent.bind_runtime(controller, guest, trace=trace, stop_event=stop_event)
     apps_seen: dict[str, int] = {}
 
     status, step, n_failed, n_truncated = "max_steps", 0, 0, 0
@@ -110,7 +111,8 @@ def run_episode(agent: AgentBase, task: Task, controller: DesktopController, gue
             log(f"[{step:02d}] !! reply parsed into {len(actions)} actions; executing the first "
                 f"{max_actions_per_step} (max_actions_per_step) and dropping the rest")
             actions = actions[:max_actions_per_step]
-        log(f"[{step:02d}] {len(actions)} action(s): {[str(x)[:60] for x in actions]}")
+        if not agent.owns_episode_loop:
+            log(f"[{step:02d}] {len(actions)} action(s): {[str(x)[:60] for x in actions]}")
 
         stop = False
         for act in actions:
@@ -168,8 +170,19 @@ def run_episode(agent: AgentBase, task: Task, controller: DesktopController, gue
         if stop:
             break
 
-    return {"status": status, "steps_used": step, "max_steps": max_steps,
-            "n_failed_actions": n_failed, "n_truncated_steps": n_truncated,
-            "max_actions_per_step": max_actions_per_step or None,
-            "duration_s": round(time.time() - t_start, 1),
-            "apps_seen": apps_seen, "harness_version": HARNESS_VERSION}
+    result = {"status": status, "steps_used": step, "max_steps": max_steps,
+              "n_failed_actions": n_failed, "n_truncated_steps": n_truncated,
+              "max_actions_per_step": max_actions_per_step or None,
+              "duration_s": round(time.time() - t_start, 1),
+              "apps_seen": apps_seen, "harness_version": HARNESS_VERSION}
+    if agent.owns_episode_loop:
+        internal = agent.episode_stats()
+        for key in ("steps_used", "n_failed_actions", "n_truncated_steps"):
+            value = internal.get(key)
+            if isinstance(value, int) and value >= 0:
+                result[key] = value
+        # an agent that owns its loop knows how it ended: its budget (max_steps) or an
+        # interruption are reported as such, not as the DONE it had to return to stop the runner
+        if isinstance(internal.get("status"), str) and internal["status"] in ("max_steps", "interrupted"):
+            result["status"] = internal["status"]
+    return result

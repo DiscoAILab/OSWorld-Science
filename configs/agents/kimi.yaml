@@ -1,0 +1,44 @@
+# Moonshot's KimiAgent (tool-calling computer use), vendored unmodified under
+# agents/kimi/upstream and wrapped by agents/kimi/adapter.py. Only kimi-k3 runs under it.
+agent: kimi
+
+# The vendored agent builds its own OpenAI client on the backend's base_url and posts to
+# chat/completions; it has no Responses path.
+api: chat_completions
+
+# gui    = desktop tools only (the recorded sweeps)
+# hybrid = adds a RUN_COMMAND shell tool executed by the runner
+# `--kimi-mode` overrides.
+mode: gui
+
+# upstream = Moonshot's factory budget: up to 100 screenshots per request, then compacted to 10
+#            by the vendored agent itself (afterwards 10..99 per request, its formula is off by
+#            one against the shared window), history 1000 steps, reply cap 65536, temperature
+#            0.0 / top_p 0.95 sent, forced FAIL on the last step. The recorded stat sweep ran on
+#            this; it is NOT budget-matched with the PromptAgent arm.
+# matched  = the screenshot window of the other agents (limit 6 / keep 5), 5 steps of history,
+#            the run's --max-tokens, no temperature/top_p, no forced FAIL.
+# `--kimi-budget` overrides.
+budget: upstream
+
+# Each budget may set `screenshot_window` (limit / keep / prune, as in prompt.yaml). When it is
+# set, the adapter applies it to the vendored agent's requests (a pruned image becomes Moonshot's
+# own "[Screenshot at Step n]" text) and switches the vendored image compaction
+# (num_max_images / num_compact_images) off. null keeps the vendored compaction. The other keys
+# are KimiAgent constructor arguments; max_history_length / history_slide_chunk bound the steps
+# of text history, independently of the screenshots. --screenshot-limit / --screenshot-keep /
+# --screenshot-prune override the budget's window.
+budgets:
+  upstream:                          # every KimiAgent constructor default
+    screenshot_window: null          # Moonshot's own compaction, as the recorded sweep ran
+  matched:
+    screenshot_window:
+      limit: 6                       # 5 earlier + the current, the PromptAgent's window
+      keep: 5
+      prune: drop_oldest
+    max_history_length: 5            # 5 earlier steps of text, as the PromptAgent replays
+    history_slide_chunk: 1           # the default 10 would blank the whole window at 5
+    fail_on_max_steps: false         # do not burn the last step on a forced FAIL
+
+# Seconds per request inside the vendored agent (it retries on its own).
+request_timeout: 900

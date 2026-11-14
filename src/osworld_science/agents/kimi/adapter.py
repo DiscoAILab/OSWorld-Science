@@ -5,11 +5,17 @@ The agent itself is vendored, unmodified, in `.upstream` (from xlang-ai/OSWorld
 wrapping exactly:
 
   * `upstream` budget (default): Moonshot's factory settings — up to 100
-    screenshots per request, history 1000, reply cap 65536, temperature 0.0
-    and top_p 0.95 sent, forced FAIL on the last step — the configuration the
-    recorded stat sweep ran on. It is NOT budget-matched with the other models;
-    `matched` aligns history window 5, slide chunk 1, six images per request,
-    no forced FAIL and the CLI max_tokens with the PromptAgent arm;
+    screenshots per request, compacted to 10 by the vendored agent itself,
+    history 1000, reply cap 65536, temperature 0.0 and top_p 0.95 sent,
+    forced FAIL on the last step — the configuration the recorded stat sweep
+    ran on. It is NOT budget-matched with the other models; `matched` aligns
+    the screenshot window (limit 6, keep 5), a 5-step history with slide
+    chunk 1, no forced FAIL and the CLI max_tokens with the PromptAgent arm;
+  * the shared screenshot window (agents/window.py) is applied on top of the
+    vendored message builder whenever the budget (or the command line) sets
+    one: every image is tagged with its step on the way in, pruned images
+    become Moonshot's own "[Screenshot at Step n]" text, and the vendored
+    image compaction is switched off so only one mechanism decides;
   * temperature/top_p stripped from the payload (matched only);
   * `provider.order` injected for OpenRouter;
   * tool results fed back through `obs["last_tool_result"]`;
@@ -21,18 +27,20 @@ import json
 from pathlib import Path
 
 from ...llm.models import ResolvedModel
+from ...llm.usage import UsageMeter
 from ...tasks.model import Task
 from ..base import ActionResult, AgentBase, AgentRunConfig, Observation
 from ..registry import register_agent
+from ..window import ScreenshotWindow, WindowConfig
 from .upstream import KimiAgent
 
 KIMI_BUDGET_MATCHED = {
-    "max_history_length": 5,     # aligned with max_trajectory_length=5
+    "max_history_length": 5,     # 5 earlier steps of text, the PromptAgent's history
     "history_slide_chunk": 1,    # the default 10 would blank the whole window at 5
-    "num_max_images": 6,         # 5 history + current, exactly the PromptAgent's count
-    "num_compact_images": 1,
     "fail_on_max_steps": False,  # do not burn the last step on a forced FAIL
 }
+KIMI_MATCHED_WINDOW = {"limit": 6, "keep": 5, "prune": "drop_oldest"}   # 5 earlier + current
+NO_COMPACTION = 10 ** 6          # num_max_images that the vendored compaction never reaches
 
 
 
@@ -43,41 +51,23 @@ class _UsageTap:
     def __init__(self, agent, model: ResolvedModel, raw_log: Path):
         self._inner = agent.call_llm
         self.model, self.raw = model, raw_log
-        self.input_tokens = self.output_tokens = self.total_tokens = 0
-        self.cached_input_tokens = self.calls = 0
-        self.upstream_cost: float | None = None
+        self.meter = UsageMeter.for_model(model)     # tokens, cache, cost (llm/usage.py)
 
     def __call__(self, payload):
         content, info = self._inner(payload)
         usage = info.get("usage") or {}
-        if usage:
-            self.calls += 1
-            self.input_tokens += int(usage.get("prompt_tokens") or 0)
-            self.output_tokens += int(usage.get("completion_tokens") or 0)
-            self.total_tokens += int(usage.get("total_tokens") or 0)
-            details = usage.get("prompt_tokens_details") or {}
-            self.cached_input_tokens += int(details.get("cached_tokens") or 0)
-            if usage.get("cost") is not None:
-                self.upstream_cost = (self.upstream_cost or 0.0) + float(usage["cost"])
+        counted = self.meter.add(usage) if usage else None
         with self.raw.open("a") as f:
             f.write(json.dumps({"model": self.model.name, "finish": info.get("finish_reason"),
                                 "tool_calls": [tc.get("function", {}).get("name")
                                                for tc in (info.get("tool_calls") or [])],
-                                "content_len": len(content or ""), "usage": usage or None},
+                                "content_len": len(content or ""), "usage": usage or None,
+                                "counted": counted},
                                ensure_ascii=False) + "\n")
         return content, info
 
-    def cost_usd(self):
-        price = self.model.spec.price
-        if not price or price.get("in") is None or price.get("out") is None:
-            return None
-        return (self.input_tokens * price["in"] + self.output_tokens * price["out"]) / 1e6
-
     def token_stats(self) -> dict:
-        return {"input_tokens": self.input_tokens, "output_tokens": self.output_tokens,
-                "total_tokens": self.total_tokens, "cached_input_tokens": self.cached_input_tokens,
-                "n_llm_calls": self.calls, "cost_usd": self.cost_usd(),
-                "upstream_cost_usd": self.upstream_cost}
+        return self.meter.stats()
 
 
 class KimiAgentAdapter(AgentBase):
@@ -85,8 +75,9 @@ class KimiAgentAdapter(AgentBase):
     predict_attempts = 1
     stop_on_empty_response = False
 
-    def __init__(self, inner, tap: _UsageTap, mode: str, budget: str):
+    def __init__(self, inner, tap: _UsageTap, mode: str, budget: str, window: ScreenshotWindow | None = None):
         self.inner, self.tap, self.mode, self.budget = inner, tap, mode, budget
+        self.window = window
         self._pending_result = None
 
     def reset(self) -> None:
@@ -120,9 +111,15 @@ class KimiAgentAdapter(AgentBase):
         return self.tap.token_stats()
 
     def describe(self) -> dict:
-        return {"agent": "kimi", "agent_mode": self.mode, "kimi_budget": self.budget,
-                "images_per_request_cap": self.inner.num_max_images,
-                "history_window": self.inner.max_history_length,
+        if self.window is not None:
+            images = self.window.stats()
+        else:      # the vendored agent compacts on its own (the `upstream` budget)
+            images = {"screenshot_window": None, "kimi_image_compaction": {
+                "num_max_images": self.inner.num_max_images, "num_compact_images": self.inner.num_compact_images}}
+        return {"agent": "kimi", "api": "chat_completions", "agent_mode": self.mode, "kimi_budget": self.budget,
+                **images,
+                "max_history_steps": self.inner.max_history_length,
+                "history_slide_chunk": self.inner.history_slide_chunk,
                 "fail_on_max_steps": self.inner.fail_on_max_steps,
                 "temperature_sent": None if self.budget == "matched" else self.inner.temperature,
                 "max_tokens": self.inner.max_tokens}
@@ -132,19 +129,95 @@ class KimiAgentAdapter(AgentBase):
         return self.inner.system_prompt
 
 
+def budget_settings(budget: str, options: dict) -> tuple[dict, WindowConfig]:
+    """(KimiAgent constructor overrides, screenshot window) for a named budget: the
+    `budgets:` table of configs/agents/kimi.yaml when present, else the built-in ones
+    (`upstream` = Moonshot's factory settings, no window; `matched` = KIMI_BUDGET_MATCHED +
+    limit 6 / keep 5). A top-level `screenshot_window` (the command line) is merged over
+    the budget's."""
+    if "history_window" in options:
+        WindowConfig.from_options(options)          # raises with the migration hint
+    table = options.get("budgets") or {}
+    if budget in table:
+        kwargs = dict(table[budget] or {})
+        window = kwargs.pop("screenshot_window", None)
+    elif budget == "matched":
+        kwargs, window = dict(KIMI_BUDGET_MATCHED), dict(KIMI_MATCHED_WINDOW)
+    elif budget == "upstream":
+        kwargs, window = {}, None
+    else:
+        raise ValueError(f"kimi budget {budget!r} is neither matched/upstream nor a key of `budgets:` "
+                         f"in configs/agents/kimi.yaml")
+    if "screenshot_window" in options:
+        override = options["screenshot_window"]
+        window = {**window, **override} if isinstance(window, dict) and isinstance(override, dict) else override
+    return kwargs, WindowConfig.from_value(window, where=f"kimi budget {budget}: screenshot_window")
+
+
+def install_window(inner, config: WindowConfig) -> ScreenshotWindow:
+    """Apply the shared screenshot window to the vendored agent's requests without touching its
+    code. Every image the message builder emits comes from `_image_message_from_obs(observation)`;
+    the observation objects are the ones stored in `inner.history[step]` (the live one is the
+    current step), so the wrapper tags each image with its step. After `prepare_messages` the
+    window decides which steps' images stay; the others become "[Screenshot at Step n]", the
+    vendored agent's own wording for a compacted image."""
+    window = ScreenshotWindow(config)
+    steps_by_obs: dict[int, int] = {}
+    original_image = inner._image_message_from_obs
+    original_prepare = inner.prepare_messages
+
+    def image_with_step(obs):
+        part = original_image(obs)
+        return {**part, "_osci_step": steps_by_obs.get(id(obs), inner.cur_step)}
+
+    def prepare_messages(instruction, obs):
+        steps_by_obs.clear()
+        steps_by_obs.update({id(h.get("observation")): step for step, h in inner.history.items()
+                             if isinstance(h, dict) and h.get("observation") is not None})
+        messages = original_prepare(instruction, obs)
+        slots = []
+        for message in messages:
+            content = message.get("content")
+            if isinstance(content, list):
+                slots += [(part["_osci_step"], content, i) for i, part in enumerate(content)
+                          if isinstance(part, dict) and "_osci_step" in part]
+        omit = window.apply(sorted({step for step, _, _ in slots}))      # steps are chronological
+        for step, content, i in slots:
+            if step in omit:
+                content[i] = {"type": "text", "text": f"[Screenshot at Step {step}]"}
+            else:
+                content[i] = {k: v for k, v in content[i].items() if k != "_osci_step"}
+        return messages
+
+    inner._image_message_from_obs = image_with_step
+    inner.prepare_messages = prepare_messages
+    return window
+
+
 @register_agent("kimi")
 def build_kimi_agent(model: ResolvedModel, task: Task, cfg: AgentRunConfig, raw_log: Path,
                      log=print) -> KimiAgentAdapter:
-    mode = cfg.options.get("kimi_mode", "gui")
-    budget = cfg.options.get("kimi_budget", "upstream")
-    kwargs = dict(KIMI_BUDGET_MATCHED) if budget == "matched" else {}
+    """Knobs come from configs/agents/kimi.yaml (`mode`, `budget`, `budgets` with their
+    `screenshot_window`, `request_timeout`) with the command line on top; the vendored agent
+    posts to chat/completions itself."""
+    if cfg.api != "chat_completions":
+        raise ValueError(f"the kimi agent speaks chat/completions only (configs/agents/kimi.yaml says "
+                         f"api: {cfg.api})")
+    mode = str(cfg.options.get("mode", "gui"))
+    budget = str(cfg.options.get("budget", "upstream"))
+    kwargs, window_config = budget_settings(budget, cfg.options)
+    if window_config.limit is not None:      # one mechanism decides: switch the vendored compaction off
+        kwargs["num_max_images"] = kwargs["num_compact_images"] = NO_COMPACTION
     if budget == "matched":
-        kwargs["max_tokens"] = cfg.max_tokens
+        kwargs.setdefault("max_tokens", cfg.max_tokens)
+    if cfg.options.get("request_timeout") is not None:
+        kwargs["request_timeout"] = float(cfg.options["request_timeout"])
     inner = KimiAgent(model=model.model_id, max_steps=cfg.max_steps, agent_mode=mode,
                       password="password", screen_size=cfg.screen_size,
                       base_url=model.base_url, api_key=model.key,
                       allow_ask_user=False, **kwargs)
     inner.reset()
+    window = install_window(inner, window_config) if window_config.limit is not None else None
     if budget == "matched":
         original = inner._payload
 
@@ -165,4 +238,4 @@ def build_kimi_agent(model: ResolvedModel, task: Task, cfg: AgentRunConfig, raw_
             return body
         inner._payload = with_provider
     (cfg.run_dir / "system_prompt.txt").write_text(inner.system_prompt, encoding="utf-8")
-    return KimiAgentAdapter(inner, tap, mode, budget)
+    return KimiAgentAdapter(inner, tap, mode, budget, window)

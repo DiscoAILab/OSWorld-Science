@@ -27,7 +27,7 @@ def test_snapshots_carry_a_domain():
     s = Settings.load()
     reg = SnapshotRegistry(s.configs_dir / "snapshots.yaml")
     assert {reg[n].domain for n in reg.names()} == {
-        "stat", "linguistics", "biomed", "chem", "eeg", "geoscience", "physics"
+        "stat", "linguistics", "biomed", "chem", "econ", "eeg", "geoscience", "physics"
     }
 
 

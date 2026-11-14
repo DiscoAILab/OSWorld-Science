@@ -2,10 +2,12 @@
 the configuration every sweep used: observation_type="screenshot",
 action_space="pyautogui", max_trajectory_length=5, no full-history summary.
 
-Message construction, history windowing, image detail, the reflection
-convention ("No valid action" for an empty previous reply) and the
-"unparsable → WAIT" rule are unchanged; the LLM call goes through the
-injected `ModelCaller`.
+Message construction, image detail, the reflection convention ("No valid
+action" for an empty previous reply) and the "unparsable → WAIT" rule are
+unchanged; the LLM call goes through the injected `ModelCaller`. The history
+is bounded by the shared screenshot window (agents/window.py): a pruned
+screenshot takes its whole turn (the screenshot and the reply to it) out of
+the request; `limit: 6, keep: 5` is the recorded sweeps' window of five.
 """
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from ...llm.models import ResolvedModel
 from ...tasks.model import Task
 from ..base import ActionResult, AgentBase, AgentRunConfig, Observation
 from ..registry import register_agent
+from ..window import ScreenshotWindow, WindowConfig
 from .parsing import parse_code_from_string
 from .prompts import SYS_PROMPT_IN_SCREENSHOT_OUT_CODE
 
@@ -30,12 +33,14 @@ class PromptAgent(AgentBase):
     stop_on_empty_response = True
 
     def __init__(self, caller: ModelCaller, model_id: str, max_tokens: int = 16000,
-                 max_trajectory_length: int = 5, image_detail: str = "high",
-                 top_p: float = 0.9, temperature: float = 0.5):
+                 max_trajectory_length: int | None = 5, image_detail: str = "high",
+                 top_p: float = 0.9, temperature: float = 0.5, window: WindowConfig | None = None):
+        """`window` is the screenshot window; without one, `max_trajectory_length` N earlier
+        steps slide (limit N + 1, keep N), the upstream PromptAgent's parameter."""
         self.caller = caller
         self.model_id = model_id
         self.max_tokens = max_tokens
-        self.max_trajectory_length = max_trajectory_length
+        self.window = ScreenshotWindow(window or WindowConfig.sliding(max_trajectory_length))
         self.image_detail = image_detail
         self.top_p, self.temperature = top_p, temperature
         self.system_message = SYS_PROMPT_IN_SCREENSHOT_OUT_CODE
@@ -45,6 +50,7 @@ class PromptAgent(AgentBase):
 
     def reset(self) -> None:
         self.thoughts, self.actions, self.observations = [], [], []
+        self.window.reset()
 
     @staticmethod
     def _screen_size(png: bytes) -> tuple[int, int]:
@@ -63,13 +69,11 @@ class PromptAgent(AgentBase):
 
         assert len(self.observations) == len(self.actions) == len(self.thoughts), \
             "The number of observations and actions should be the same."
-        n = self.max_trajectory_length
-        if len(self.observations) > n:
-            obs_w, act_w, th_w = (self.observations[-n:], self.actions[-n:], self.thoughts[-n:]) \
-                if n else ([], [], [])
-        else:
-            obs_w, act_w, th_w = self.observations, self.actions, self.thoughts
-        for prev_obs, _prev_action, prev_thought in zip(obs_w, act_w, th_w, strict=False):
+        # screenshot i is step i's; the current one (index len) is never pruned
+        omit = self.window.apply(list(range(len(self.observations) + 1)))
+        turns = [i for i in range(len(self.observations)) if i not in omit]
+        for i in turns:
+            prev_obs, prev_thought = self.observations[i], self.thoughts[i]
             messages.append({"role": "user", "content": [
                 {"type": "text", "text": STEP_PROMPT},
                 {"type": "image_url", "image_url": {
@@ -117,7 +121,8 @@ class PromptAgent(AgentBase):
         return self.caller.token_stats()
 
     def describe(self) -> dict:
-        return {"agent": self.name, "history_window": self.max_trajectory_length,
+        return {"agent": self.name, "api": getattr(self.caller, "api", "chat_completions"),
+                **self.window.stats(),
                 "image_detail": self.image_detail, "max_tokens": self.max_tokens,
                 "temperature_sent": None}
 
@@ -125,9 +130,14 @@ class PromptAgent(AgentBase):
 @register_agent("prompt")
 def build_prompt_agent(model: ResolvedModel, task: Task, cfg: AgentRunConfig, raw_log: Path,
                        log=print) -> PromptAgent:
-    caller = ModelCaller(model, raw_log, reasoning_effort=cfg.reasoning_effort, log=log)
+    """Knobs come from configs/agents/prompt.yaml (`screenshot_window`, `image_detail`) with the
+    command line on top; `api` must be chat_completions, the only one ModelCaller speaks."""
+    if cfg.api != "chat_completions":
+        raise ValueError(f"the prompt agent speaks chat/completions only (configs/agents/prompt.yaml says "
+                         f"api: {cfg.api})")
+    caller = ModelCaller(model, raw_log, reasoning_effort=cfg.reasoning_effort, log=log, api=cfg.api)
     agent = PromptAgent(caller, model_id=model.name, max_tokens=cfg.max_tokens,
-                        max_trajectory_length=int(cfg.options.get("history_window", 5)),
+                        window=WindowConfig.from_options(cfg.options, default={"limit": 6, "keep": 5}),
                         image_detail=cfg.image_detail)
     agent.reset()
     return agent

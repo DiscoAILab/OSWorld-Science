@@ -29,12 +29,12 @@ def test_vendored_files_are_unmodified():
 
 def _model(provider_order=("moonshotai",)) -> ResolvedModel:
     backend = BackendSpec(name="openrouter", kind="openai_chat",
-                          url_template="https://openrouter.ai/api/v1/chat/completions",
+                          base_url_template="https://openrouter.ai/api/v1",
                           key_env="OPENROUTER_API_KEY", supports_provider_order=True)
     spec = ModelSpec(name="kimi-k3", backend=backend, model_id="moonshotai/kimi-k3",
                      price={"in": 3.0, "out": 15.0}, max_out=943718,
-                     provider_order=tuple(provider_order), agent="kimi")
-    return ResolvedModel(spec=spec, url="https://openrouter.ai/api/v1/chat/completions", key="k")
+                     provider_order=tuple(provider_order), agents=("kimi",), default_agent="kimi")
+    return ResolvedModel(spec=spec, base_url="https://openrouter.ai/api/v1", key="k")
 
 
 def _task(tmp_path: Path) -> Task:
@@ -53,14 +53,14 @@ def test_kimi_registered_and_matched_budget(tmp_path, monkeypatch):
     run_dir = tmp_path / "agent"
     run_dir.mkdir()
     cfg = AgentRunConfig(max_steps=7, max_tokens=16000, run_dir=run_dir,
-                         options={"kimi_mode": "gui", "kimi_budget": "matched"})
+                         options={"mode": "gui", "budget": "matched"})
     agent = build_kimi_agent(_model(), _task(tmp_path), cfg, run_dir / "llm_raw.jsonl")
     inner = agent.inner
-    matched = {"max_history_length": 5, "history_slide_chunk": 1, "num_max_images": 6,
-               "num_compact_images": 1, "fail_on_max_steps": False}
+    matched = {"max_history_length": 5, "history_slide_chunk": 1, "fail_on_max_steps": False}
     assert KIMI_BUDGET_MATCHED == matched
     for k, v in matched.items():
         assert getattr(inner, k) == v, k
+    assert inner.num_max_images == 10 ** 6       # the shared window decides, the vendored compaction is off
     # with chunk=1 the window really is the last five steps (chunk=10 would blank it)
     inner.cur_step = 7
     inner.history = {i: {} for i in range(7)}
@@ -82,17 +82,19 @@ def test_kimi_registered_and_matched_budget(tmp_path, monkeypatch):
     assert body["model"] == "moonshotai/kimi-k3" and body["max_tokens"] == 16000
     d = agent.describe()
     assert d["agent"] == "kimi" and d["kimi_budget"] == "matched" and d["temperature_sent"] is None
-    assert d["images_per_request_cap"] == 6 and d["history_window"] == 5
+    assert d["screenshot_window"] == {"limit": 6, "keep": 5, "prune": "drop_oldest"} and d["max_history_steps"] == 5
 
 
 def test_kimi_upstream_budget_keeps_factory_settings(tmp_path):
     run_dir = tmp_path / "agent"
     run_dir.mkdir()
     cfg = AgentRunConfig(max_steps=7, max_tokens=16000, run_dir=run_dir,
-                         options={"kimi_mode": "hybrid", "kimi_budget": "upstream"})
+                         options={"mode": "hybrid", "budget": "upstream"})
     agent = build_kimi_agent(_model(), _task(tmp_path), cfg, run_dir / "llm_raw.jsonl")
     inner = agent.inner
     assert inner.num_max_images == 100 and inner.max_history_length == 1000 and inner.fail_on_max_steps is True
+    assert agent.window is None and agent.describe()["screenshot_window"] is None
+    assert agent.describe()["kimi_image_compaction"] == {"num_max_images": 100, "num_compact_images": 10}
     assert inner.max_tokens == 65536 and agent.describe()["max_tokens"] == 65536
     assert inner.agent_mode == "hybrid"
     assert "run_command" in [t["function"]["name"] for t in inner.tool_declares]
@@ -190,7 +192,7 @@ def test_real_request_path_and_accounting(tmp_path, monkeypatch):
 
     run_dir = tmp_path / "agent"
     run_dir.mkdir()
-    cfg = AgentRunConfig(max_steps=5, max_tokens=16000, run_dir=run_dir, options={"kimi_budget": "matched"})
+    cfg = AgentRunConfig(max_steps=5, max_tokens=16000, run_dir=run_dir, options={"budget": "matched"})
     agent = build_kimi_agent(_model(), _task(tmp_path), cfg, run_dir / "llm_raw.jsonl")
     response, actions = agent.predict("Do it.", Observation(png))
     # (coordinates <= 1 would be read as normalised and rescaled to the screen)
@@ -210,9 +212,13 @@ def test_real_request_path_and_accounting(tmp_path, monkeypatch):
     assert len(captured[1]["body"]["messages"]) > len(body["messages"])
 
     stats = agent.token_stats()
+    # the spec has no cache price, so the 80 cached tokens are billed at `in`; no `cost:` = static
     assert stats == {"input_tokens": 200, "output_tokens": 20, "total_tokens": 220,
-                     "cached_input_tokens": 80, "n_llm_calls": 2,
-                     "cost_usd": (200 * 3.0 + 20 * 15.0) / 1e6, "upstream_cost_usd": 0.002}
+                     "cached_input_tokens": 80, "cache_write_tokens": 0, "reasoning_tokens": 0,
+                     "cache_hit_rate": 0.4, "n_llm_calls": 2,
+                     "cost_usd": (200 * 3.0 + 20 * 15.0) / 1e6, "cost_source": "static", "n_calls_cost_estimated": 0,
+                     "cost_usd_static": (200 * 3.0 + 20 * 15.0) / 1e6, "upstream_cost_usd": 0.002}
     lines = [_json.loads(x) for x in (run_dir / "llm_raw.jsonl").read_text().splitlines()]
     assert len(lines) == 2 and lines[0]["tool_calls"] == ["execute_pyautogui_code"]
     assert lines[0]["usage"]["prompt_tokens"] == 100 and lines[0]["finish"] == "tool_calls"
+    assert lines[0]["counted"]["cache_read_tokens"] == 40 and lines[0]["counted"]["cost_source"] == "static"

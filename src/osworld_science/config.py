@@ -76,8 +76,9 @@ class Settings:
     # tools
     docker_host: str = ""
     rscript: str = "Rscript"
+    screenshot_via: str = "execute"      # execute | endpoint (guest/screenshot.py)
     # agent / request knobs
-    image_detail: str = "high"
+    image_detail: str = ""               # "" = the agent config's value (configs/agents/<agent>.yaml)
     max_tokens: int = 16000
     reasoning_effort: str = ""
     max_actions_per_step: int = 10       # 0 = unlimited; see runner/episode.py
@@ -113,7 +114,10 @@ class Settings:
             raise ValueError(f"OSCI_VM_COPY_IMAGES must be auto|always|never, not {s.vm_copy_images!r}")
         s.docker_host = env.get("OSCI_DOCKER_HOST") or env.get("DOCKER_HOST") or ""
         s.rscript = env.get("OSCI_RSCRIPT") or "Rscript"
-        s.image_detail = env.get("OSCI_IMAGE_DETAIL") or "high"
+        s.screenshot_via = (env.get("OSCI_SCREENSHOT_VIA") or "execute").strip().lower()
+        if s.screenshot_via not in ("execute", "endpoint"):
+            raise ValueError(f"OSCI_SCREENSHOT_VIA must be execute|endpoint, not {s.screenshot_via!r}")
+        s.image_detail = env.get("OSCI_IMAGE_DETAIL") or ""
         s.max_tokens = integer("OSCI_MAX_TOKENS", 16000)
         s.reasoning_effort = env.get("OSCI_REASONING_EFFORT") or ""
         s.max_actions_per_step = integer("OSCI_MAX_ACTIONS_PER_STEP", 10)
@@ -137,7 +141,8 @@ class Settings:
             "vm_fast_dir": str(self.vm_fast_dir),
             "vm_copy_images": self.vm_copy_images,
             "rscript": self.rscript,
-            "image_detail": self.image_detail,
+            "screenshot_via": self.screenshot_via,
+            "image_detail": self.image_detail or None,
             "max_tokens": self.max_tokens,
             "reasoning_effort": self.reasoning_effort or None,
             "max_actions_per_step": self.max_actions_per_step,

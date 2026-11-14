@@ -19,14 +19,21 @@ scripts/vm_prep/
 ├── physics/      provision_guest.sh (OpenFOAM + ParaView)
 ├── geoscience/   QGIS image verification helpers
 ├── radiology/    provision_guest.sh → weasis_setup.py + slicer_setup.py + slicer_firstrun.sh
-├── linguistics/  provision_guest.sh → praat_setup.py
-├── eeg/          provision_guest.sh (apt octave + octave-signal/statistics, git clone EEGLAB 2025.1.0 → /opt/eeglab)
+├── linguistics/  provision_guest.sh → praat_setup.py (ubuntu_linguistics);
+│                 provision_rkward.sh → rkward_guest.sh (ubuntu_rkward: R, RKWard, tidyverse,
+│                 LibreOffice Writer/Calc); build_r_judge.sh (host-side R sandbox image of the
+│                 hoosier_phonotactics_lab1 grader, not a guest image)
+├── eeg/          provision_guest.sh (in-guest script: apt octave + octave-signal/statistics,
+│                 git clone EEGLAB 2025.1.0 → /opt/eeglab)
 └── econ/         provision_guest.sh → econ_setup.py (apt gretl 2022a + libreoffice-calc; LibreOffice first-run dialogs off)
 ```
 
 The 10 EEGLAB tasks are published under `data/eeg`, but an
-`ubuntu_eeglab.qcow2` image and reproducible `scripts/vm_prep/eeg/`
-provisioner are not yet available. The Ansys recipe travels with the dataset
+`ubuntu_eeglab.qcow2` image and a reproducible provisioner are not yet
+available: `scripts/vm_prep/eeg/provision_guest.sh` is written to run inside
+the guest, and the host-side builder (`common/build_image.sh`, `osci vm reset`)
+runs a provisioner on the host, so the `ubuntu_eeglab` snapshot registers
+none. The Ansys recipe travels with the dataset
 under `data/physics/vm/build_recipe/` because its Windows image cannot be
 redistributed and is not supported by the current runtime backend.
 
@@ -37,8 +44,8 @@ scripts/vm_prep/base/download_base.sh
 scripts/vm_prep/stat/build_image.sh          # ~30-60 min; port 5040 by default
 scripts/vm_prep/radiology/build_image.sh     # port 5050
 scripts/vm_prep/linguistics/build_image.sh   # port 5080
-scripts/vm_prep/eeg/build_image.sh           # port 5150
-scripts/vm_prep/econ/build_image.sh          # port 5160
+scripts/vm_prep/linguistics/build_rkward_image.sh   # ~15 min; port 5160; then move vm/images/ubuntu_rkward.* to data/linguistics/vm/
+scripts/vm_prep/econ/build_image.sh          # port 5170
 ```
 
 Discipline: **reset, install, bake**. `osci vm bake` refuses a guest that

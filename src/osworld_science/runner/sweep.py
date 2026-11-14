@@ -8,6 +8,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..agents.config import agent_config, load_agent_configs
+from ..agents.registry import get_agent_factory, get_agent_preflight
 from ..config import Settings
 from ..data.layout import DataLayout
 from ..llm.models import MissingCredential, ModelRegistry, ResolvedModel
@@ -16,7 +18,7 @@ from ..tasks.model import Task
 from ..vm.docker import VM, owned_port_containers, port_is_free
 from ..vm.locks import PortBusy, PortLock, port_lock_held
 from ..vm.snapshots import SnapshotRegistry
-from .pipeline import RunContext, run_cell
+from .pipeline import RunContext, agent_for, run_cell
 from .summary import Summary
 
 
@@ -30,11 +32,13 @@ class SweepOptions:
     force: bool = False
     no_reset: bool = False
     skip_preflight: bool = False
-    agent: str | None = None
-    agent_options: dict = field(default_factory=dict)
+    agent: str | None = None            # --agent: one harness for every model; None = each model's default_agent
+    agent_options: dict = field(default_factory=dict)   # --agent-option overrides of configs/agents/<agent>.yaml
     track_windows: bool = True
     max_tokens: int | None = None
     max_actions_per_step: int | None = None
+    judge: str | None = None            # judge name from configs/models.yaml; None = judges.default when a task needs one
+    no_judge: bool = False              # never review automatically; cells stay pending
 
 
 def plan_jobs(models: list[str], tasks: list[Task], summary: Summary, force: bool,
@@ -67,14 +71,34 @@ def run_sweep(settings: Settings, opts: SweepOptions, log=print) -> Summary:
         except MissingCredential as e:
             raise SystemExit(str(e)) from None
 
-    log("╔══ preflight (per model: one text and one image request)")
+    # which harness each model runs under, and that harness's config: decided and checked before
+    # any request is sent, so an unsupported --agent or a bad configs/agents file stops the run here
+    agent_configs = load_agent_configs(settings.configs_dir / "agents")
+    agents: dict[str, str] = {}
+    for m, rm in resolved.items():
+        try:
+            agents[m] = agent_for(rm.spec, opts.agent)
+            get_agent_factory(agents[m])
+            agent_config(agent_configs, agents[m], opts.agent_options)
+        except (ValueError, KeyError) as e:
+            raise SystemExit(str(e.args[0]) if isinstance(e, KeyError) and e.args else str(e)) from None
+    summary.set_meta(agents={m: {"agent": a, **agent_config(agent_configs, a, opts.agent_options).describe()}
+                             for m, a in agents.items()})
+
+    log("╔══ preflight (per model: one text and one image request through the agent's API)")
     ok_models = []
     for m, rm in resolved.items():
+        acfg = agent_config(agent_configs, agents[m], opts.agent_options)
         if opts.skip_preflight:
             ok, why = True, "skipped"
         else:
-            ok, why = preflight(rm, reasoning_effort=settings.reasoning_effort, log=log)
-        log(f"║ {'✓' if ok else '✗'} {m:20s} {rm.backend.name:11s} {rm.model_id:28s} {why}")
+            ok, why = preflight(rm, reasoning_effort=settings.reasoning_effort, log=log, api=acfg.api)
+            probe = get_agent_preflight(agents[m]) if ok else None
+            if probe is not None:                       # e.g. "does this route serve the computer toolset?"
+                ok, more = probe(rm, acfg, log)
+                why = f"{why}; {more}"
+        log(f"║ {'✓' if ok else '✗'} {m:20s} {rm.backend.name:11s} {rm.model_id:28s} "
+            f"{agents[m]}/{acfg.api:16s} {why}")
         summary.set_preflight(m, ok, why, rm.describe())
         if ok:
             ok_models.append(m)
@@ -82,6 +106,28 @@ def run_sweep(settings: Settings, opts: SweepOptions, log=print) -> Summary:
             log(f"!! {m} failed preflight, its whole column is skipped")
     if not ok_models:
         raise SystemExit("no model passed preflight")
+
+    # the judge is part of the run for tasks that declare one: resolve and probe it now, not after
+    # the agents have spent their budget and left cells waiting for a review nobody can write
+    from ..judge.runner import JudgeError, judge_preflight, select_judge
+    try:
+        judge_model, judge_why = select_judge(registry, settings.env, opts.tasks, opts.judge, opts.no_judge)
+    except JudgeError as e:
+        raise SystemExit(f"judge: {e}") from None
+    if judge_model is None:
+        log(f"║ · judge: {judge_why}")
+    else:
+        if opts.skip_preflight:
+            ok, how = True, "skipped"
+        else:
+            ok, how = judge_preflight(judge_model, reasoning_effort=settings.reasoning_effort, log=log)
+        log(f"║ {'✓' if ok else '✗'} judge {judge_model.name:14s} {judge_model.backend.name:11s} "
+            f"{judge_model.model_id:28s} {how}")
+        summary.set_preflight(f"judge:{judge_model.name}", ok, how, judge_model.describe())
+        if not ok:
+            raise SystemExit(f"judge {judge_model.name} failed preflight: {how}. Fix the key or endpoint in .env, "
+                             f"pick another judge with --judge NAME, or pass --no-judge to run without automatic review")
+        log(f"║   judge {judge_why}")
 
     for t in opts.tasks:
         if t.snapshot not in snapshots:
@@ -101,12 +147,12 @@ def run_sweep(settings: Settings, opts: SweepOptions, log=print) -> Summary:
 
     stop_event = threading.Event()
     ctx = RunContext(settings=settings, layout=layout, snapshots=snapshots, run_dir=run_dir,
-                     agent_override=opts.agent, agent_options=opts.agent_options,
+                     agent_override=opts.agent, agent_options=opts.agent_options, agent_configs=agent_configs,
                      no_reset=opts.no_reset, track_windows=opts.track_windows,
                      max_tokens=opts.max_tokens or settings.max_tokens,
                      max_actions_per_step=(settings.max_actions_per_step if opts.max_actions_per_step is None
                                            else opts.max_actions_per_step),
-                     stop_event=stop_event)
+                     stop_event=stop_event, judge_model=judge_model)
     q: queue.Queue = queue.Queue()
     for j in jobs:
         q.put((j[0], j[1], 0))
@@ -220,14 +266,18 @@ def worker_loop(port: int, q: queue.Queue, stop_event: threading.Event, run_one,
 
 def _print_totals(summary: Summary, models: list[str], tasks: list[Task], log=print) -> None:
     log(f"\n══════════ totals (details in {summary.path})")
-    log(f"  {'model':20s} {'done':>7s} {'PASS':>5s} {'in':>11s} {'out':>11s} {'total':>12s} {'USD':>9s}")
+    log(f"  {'model':20s} {'done':>7s} {'PASS':>5s} {'in':>11s} {'cached':>11s} {'hit':>5s} {'out':>11s} "
+        f"{'total':>12s} {'USD':>9s}")
     tot = summary.data.get("totals", {})
     for m in models:
         rows = summary.data["results"].get(m, {})
         done = [r for r in rows.values() if r.get("finished")]
         passed = [r for r in done if r.get("verdict") == "PASS"]
         b = (tot.get("by_model") or {}).get(m) or {}
+        hit = b.get("cache_hit_rate")
         log(f"  {m:20s} {len(done):3d}/{len(tasks):<3d} {len(passed):5d}"
-            f" {b.get('input_tokens', 0):11d} {b.get('output_tokens', 0):11d}"
+            f" {b.get('input_tokens', 0):11d} {b.get('cached_input_tokens', 0):11d}"
+            f" {(f'{hit:.0%}' if isinstance(hit, (int, float)) else '-'):>5s}"
+            f" {b.get('output_tokens', 0):11d}"
             f" {b.get('total_tokens', 0):12d} {b.get('cost_usd', 0.0):9.4f}"
             + ("  ← some cells lack a price; lower bound" if b.get("cost_usd_incomplete") else ""))

@@ -1,0 +1,31 @@
+# The OSWorld PromptAgent: one screenshot in, a fenced pyautogui snippet out, the runner
+# executes it. `agent` is the registered name this file configures (osci run --agent prompt).
+agent: prompt
+
+# Which OpenAI-style API the harness calls on `openai_chat` backends. The PromptAgent goes
+# through ModelCaller, which speaks chat/completions only; Anthropic backends are translated
+# to the Messages API whatever this says.
+api: chat_completions
+
+# Screenshot window, the same setting in every agent config (agents/window.py):
+#   limit  the most screenshots one request carries, the newest included
+#   keep   when the window holds `limit` and a new screenshot arrives, the prune algorithm
+#          first cuts the earlier ones to `keep`; the new one then joins (keep + 1)
+#   prune  the algorithm: drop_oldest (drops the oldest limit - keep), a name registered with
+#          agents.window.register_prune, or package.module:function
+# Here a pruned screenshot takes its whole step out of the request (the screenshot and the
+# model's reply to it). limit 6 / keep 5 is the window of five earlier steps + the current
+# screenshot the recorded sweeps used. `null` never prunes. Command line: --screenshot-limit,
+# --screenshot-keep, --screenshot-prune (or --history-window N = limit N+1, keep N).
+screenshot_window:
+  limit: 6
+  keep: 5
+  prune: drop_oldest
+
+# OpenAI-style `detail` attached to every screenshot. `original` is understood by Azure only.
+# OSCI_IMAGE_DETAIL in .env overrides this file.
+image_detail: high
+
+# Sampling: temperature/top_p are never sent (reasoning models reject them), so every model
+# runs under its provider default. Reasoning effort comes from OSCI_REASONING_EFFORT and is
+# only sent to models flagged `reasoning: true`; unset = provider default.

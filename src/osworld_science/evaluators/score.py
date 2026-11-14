@@ -3,9 +3,20 @@
 Scoring follows the task's own weights. A `stages` entry makes one check a
 gate: if it fails, every check from `blocks_from` on scores zero, because a
 number extracted from tampered inputs is not a partially correct number.
+
+A weighted check may answer "not yet": it puts a `pending` reason in its
+detail (a grader that needs an independent review of a free-text report, or
+whose sandbox is not provisioned on this host). The submission then has no
+score and no verdict, which the report tables count as VOID; what the other
+checks add up to is kept as `provisional_score`. A zero is a statement about
+the submission, and a pending check has not made one.
+
 Checks listed in `evaluator.required` must all pass for the task to PASS: if
 one scores below 1.0 the verdict is FAIL whatever the weighted total; the
-continuous score itself is not changed.
+continuous score itself is not changed. They usually carry weight 0 (a
+deliverable is present, an input came back unmodified, an artifact check), so
+a required check that answers "not yet" withholds the verdict like a weighted
+one does.
 """
 from __future__ import annotations
 
@@ -50,14 +61,30 @@ def grade(task: Task, gt: dict, submission: Path, ctx: EvalContext) -> dict:
         checks[i]["score"] = 0.0
 
     total = sum(c["weight"] * c["score"] for c in checks)
-    # `evaluator.required`: checks that must pass for the task to PASS (deliverable present,
-    # input-integrity gate, artifact checks). They usually carry zero weight, so without this
-    # step a missing required deliverable cost nothing and the task could still PASS. Any
-    # required check below 1.0 forces FAIL; the continuous score is left as the weights give
-    # it (the eeg grader suite pins "same score, FAIL" for a missing required analysis.m).
-    required = [int(i) for i in ev.get("required") or []]
-    required_failed = [i for i in required if checks[i]["score"] < 1.0]
     threshold = ev.get("pass_score", 1.0)
+    # `evaluator.required`: checks that must pass for the task to PASS. Without this step a
+    # missing required deliverable cost nothing (weight 0) and the task could still PASS.
+    required = [int(i) for i in ev.get("required") or []]
+    pending = [{"index": c["index"], "reason": str(c["detail"]["pending"])} for c in checks
+               if (c["weight"] > 0 or c["index"] in required) and c["index"] not in blocked
+               and isinstance(c["detail"], dict) and c["detail"].get("pending")]
+    waiting = {p["index"] for p in pending}
+    # Any required check below 1.0 forces FAIL; the continuous score stays as the weights
+    # give it (the eeg grader suite pins "same score, FAIL" for a missing required analysis.m).
+    required_failed = [i for i in required if i not in waiting and checks[i]["score"] < 1.0]
+    if pending:
+        return {
+            "task": task.id,
+            "verdict": None,
+            "score": None,
+            "provisional_score": round(total, 6),
+            "pending": pending,
+            "pass_score": threshold,
+            "gate_blocked": sorted(blocked),
+            "required": required,
+            "required_failed": required_failed,
+            "checks": checks,
+        }
     passed = not required_failed and total >= threshold - 1e-9
     return {
         "task": task.id,
@@ -72,11 +99,19 @@ def grade(task: Task, gt: dict, submission: Path, ctx: EvalContext) -> dict:
 
 
 def format_report(res: dict) -> str:
-    lines = [f"{res['task']}: {res['verdict']}  score {res['score']:.4f} / {res['pass_score']:g}"]
+    if res.get("pending"):
+        lines = [f"{res['task']}: PENDING  no score yet (counts as VOID); "
+                 f"the other checks add up to {res['provisional_score']:.4f} / {res['pass_score']:g}"]
+        lines += [f"  pending check {p['index']}: {p['reason']}" for p in res["pending"]]
+    else:
+        lines = [f"{res['task']}: {res['verdict']}  score {res['score']:.4f} / {res['pass_score']:g}"]
     if res.get("required_failed"):
-        lines.append(f"  required check(s) failed: {res['required_failed']} -> FAIL")
+        lines.append(f"  required check(s) failed: {res['required_failed']} -> FAIL"
+                     + (" whatever the pending check says" if res.get("pending") else ""))
+    waiting = {p["index"] for p in res.get("pending") or []}
     for c in res["checks"]:
-        mark = "ok  " if c["score"] == 1.0 else ("FAIL" if c["score"] == 0 else "part")
+        mark = "wait" if c["index"] in waiting else \
+            "ok  " if c["score"] == 1.0 else ("FAIL" if c["score"] == 0 else "part")
         lines.append(f"  [{mark}] w={c['weight']:.2f} {c['score']:.3f}  {c['label']}")
         d = c["detail"]
         if "error" in d:

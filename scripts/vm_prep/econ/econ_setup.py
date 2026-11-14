@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Install gretl and LibreOffice Calc into a running OSWorld guest (Ubuntu 22.04 jammy).
 
-    scripts/vm_prep/econ/econ_setup.py --port 5160 [--gretl-version 2021d-1build1] [--no-pin]
+    scripts/vm_prep/econ/econ_setup.py --port 5170 [--gretl-version 2021d-1build1] [--no-pin]
 
 gretl ships gretl_x11 (the GUI) and gretlcli; libreoffice-calc brings Calc with the GTK3 VCL plug-in.
 LibreOffice's first-run dialogs (tip of the day, "keep current format?") are switched off in the
@@ -42,7 +42,7 @@ LO_PROFILE = r"""<?xml version="1.0" encoding="UTF-8"?>
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--port", type=int, default=5160)
+    ap.add_argument("--port", type=int, default=5170)
     ap.add_argument("--gretl-version", default="", help="apt version string to pin; '' = repository candidate")
     a = ap.parse_args()
     g = Guest(a.port)

@@ -79,6 +79,16 @@ def my_check(submission_dir, params, gt, ctx: EvalContext):
 the host Rscript. Third-party packages can expose the
 `osworld_science.evaluators` entry-point group.
 
+## Checks that must pass
+
+`"required": [5, 6]` in the evaluator block lists check indices that must
+score 1.0 for the task to PASS. A required check below 1.0 makes the verdict
+FAIL whatever the weighted total is; the continuous `score` stays what the
+weights give, and `score.json` names the failed ones in `required_failed`.
+Use it for what a correct answer cannot make up for: a deliverable that must
+exist, the analysis program, an evidence file. Such checks normally carry
+weight 0, so without `required` they would cost nothing.
+
 ## Tests
 
 Build a correct submission from `gt.json`, then mutate copies of it: every
@@ -105,6 +115,69 @@ Grade the text with `text_include_exclude` (`{"file": "protected_input_sha256.tx
 "include": ["<sha256>"]}`), usually as a zero-weight gate. A deliverable
 counts as covered when a `vm_file` pulls it or a `vm_command_line`
 inspects it.
+
+## Files whose names the solver chooses
+
+`vm_glob` pulls every file matching a pattern into a directory of the
+submission, under the files' own names:
+
+```json
+{"type": "vm_glob", "path": "/home/user/synergy_figures/*.png",
+ "dest": "synergy_figures", "max_files": 40}
+```
+
+Wildcards go in the file name only. Matches are taken in sorted order and at
+most `max_files` of them are pulled (default 50); `collect.json` records how
+many matched. No match is not an error: grade the directory with
+`artifact_glob`, usually at weight 0 and listed in `required`:
+
+```json
+{"dir": "synergy_figures", "pattern": "*.png", "min_count": 8,
+ "kind": "png", "min_bytes": 4096, "distinct": true}
+```
+
+It scores qualifying files / `min_count` (capped at 1): a file qualifies when
+it is at least `min_bytes` long, starts with the `kind` signature (`png`,
+`pdf`) and, with `distinct`, is not byte-identical to one already counted. A
+`vm_glob` covers a directory deliverable (`/home/user/synergy_figures/`).
+The listing runs through the guest's `python3`, so it needs a Linux guest.
+
+## A check that cannot score yet
+
+Some graders need something that does not exist when the run ends: an
+independent review of a free-text report, or a sandbox the host has not built.
+Such a check returns `0.0` with a `pending` reason in its detail:
+
+```python
+return 0.0, {"pending": "independent review required: complete <cell>/review.json"}
+```
+
+While a weighted, unblocked check is pending the submission has no score and
+no verdict (`score.json` carries `"score": null`, `"pending": [...]` and what
+the other checks add up to as `provisional_score`), `osci score` prints
+PENDING, and the report tables count the cell as VOID rather than as a zero.
+Score again once the missing piece is there (`osci score`, `osci score-run`).
+`hoosier_phonotactics_lab1` is the worked example; its
+`reference_private/hoosier_phonotactics_lab1/README.md` describes the review
+it waits for. `vowel_duration_fixed_lab2` is a second one, for a task whose
+answers (segment boundaries) have no key at all and are judged by the reviewer.
+
+A task can let a model do that review. Name a module shipped with the task's
+private data in the task JSON:
+
+```jsonc
+"judge": {"module": "reference_private/<id>/osci_judge.py", "func": "review"}
+```
+
+`review(cell, client, ctx)` receives the cell directory, a `JudgeClient`
+(`client.text(...)`, `client.image_file(path)`, `client.ask_json(stage, system,
+parts)`, `client.vision`) and a context (`ctx.task`, `ctx.layout`, `ctx.solver`,
+`ctx.log`). It writes whatever review file the grader expects and returns
+`{"valid": bool, "reason": str, ...}`. `osci run` calls it for every pending
+cell of such a task (after probing the judge in preflight) and rescores;
+`osci judge --run <name>` does the same for an existing run. The judge models
+live under `judges:` in `configs/models.yaml`; `--no-judge` turns the
+automatic review off.
 
 ## Reusing an evaluator shipped with the data
 

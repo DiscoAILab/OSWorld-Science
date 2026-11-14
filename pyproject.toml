@@ -10,6 +10,8 @@ dependencies = [
     "pyyaml>=6.0",
     "pillow>=10.0",
     "loguru>=0.7",       # used by the vendored Kimi agent (agents/kimi/upstream)
+    "openai-agents>=0.23.1,<0.24",
+    "anthropic>=1.12.0",
 ]
 
 [project.optional-dependencies]
@@ -24,6 +26,11 @@ eeg = ["numpy>=1.26", "scipy>=1.11"]
 # what the six QGIS tasks' shipped checks import; the package also carries a snap calibration
 # evaluator that asserts geographiclib 2.1 exactly, but no shipped task reaches it
 geoscience = ["numpy>=1.26", "pillow>=10.0"]
+# hoosier_phonotactics_lab1: its shipped grader reads the report PDF and replays the submitted R
+# function in an isolated container (scripts/vm_prep/linguistics/build_r_judge.sh builds the image).
+# vowel_duration_fixed_lab2: its shipped grader renders the report pages (PyMuPDF), the submitted plot
+# (Pillow) and a waveform/spectrogram card per recording (numpy, matplotlib) for the reviewer.
+linguistics = ["docker>=7.0", "pypdf>=5.0", "numpy>=1.26", "matplotlib>=3.8", "pillow>=10.0", "pymupdf>=1.24,<2"]
 
 [project.scripts]
 osci = "osworld_science.cli:main"

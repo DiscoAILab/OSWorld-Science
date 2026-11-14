@@ -39,6 +39,114 @@ def test_unknown_evaluator_scores_zero(tmp_path):
     assert res["score"] == 0.0 and "unknown evaluator" in res["checks"][0]["detail"]["error"]
 
 
+@register("_pending")
+def _pending(sub, params, gt, ctx):
+    return 0.0, {"pending": "review required"}
+
+
+def test_pending_check_withholds_score_and_verdict(tmp_path):
+    from osworld_science.evaluators.score import format_report
+    ctx = EvalContext(domain="d", layout=DataLayout(tmp_path))
+    ev = {"func": ["_always", "_pending", "_always"], "weights": [0.0, 1.0, 0.0],
+          "labels": ["gate", "reviewed", "record"], "params": [{"v": 1}, {}, {"v": 0.5}],
+          "stages": [{"gate": 0, "blocks_from": 1}]}
+    res = grade(make_task(tmp_path, ev), {}, tmp_path, ctx)
+    assert res["score"] is None and res["verdict"] is None and res["provisional_score"] == 0.0
+    assert res["pending"] == [{"index": 1, "reason": "review required"}]
+    assert "PENDING" in format_report(res) and "[wait]" in format_report(res)
+    # a failed gate is a statement about the submission: the blocked check is no longer pending
+    ev["params"][0]["v"] = 0
+    res = grade(make_task(tmp_path, ev), {}, tmp_path, ctx)
+    assert res["score"] == 0.0 and res["verdict"] == "FAIL" and "pending" not in res
+    # a zero-weight pending check never withholds the score
+    ev = {"func": ["_always", "_pending"], "weights": [1.0, 0.0], "labels": ["a", "b"], "params": [{"v": 1}, {}]}
+    res = grade(make_task(tmp_path, ev), {}, tmp_path, ctx)
+    assert res["score"] == 1.0 and res["verdict"] == "PASS"
+
+
+def test_required_check_forces_fail_without_changing_the_score(tmp_path):
+    from osworld_science.evaluators.score import format_report
+    ctx = EvalContext(domain="d", layout=DataLayout(tmp_path))
+    # the weighted checks are perfect; the zero-weight required deliverable check is not
+    ev = {"func": ["_always", "_always", "_always"], "weights": [0.4, 0.6, 0.0],
+          "labels": ["a", "b", "deliverable"], "params": [{"v": 1}, {"v": 1}, {"v": 0.875}],
+          "required": [2], "pass_score": 1.0}
+    res = grade(make_task(tmp_path, ev), {}, tmp_path, ctx)
+    assert res["score"] == 1.0 and res["verdict"] == "FAIL"
+    assert res["required"] == [2] and res["required_failed"] == [2]
+    assert "required check(s) failed: [2] -> FAIL" in format_report(res)
+    # the same submission with the required check satisfied passes, on the same score
+    ev["params"][2]["v"] = 1
+    res = grade(make_task(tmp_path, ev), {}, tmp_path, ctx)
+    assert res["score"] == 1.0 and res["verdict"] == "PASS" and res["required_failed"] == []
+    assert "required" not in format_report(res)
+    # a partial score stays what the weights give, with or without the required failure
+    ev["params"] = [{"v": 1}, {"v": 0.5}, {"v": 0}]
+    res = grade(make_task(tmp_path, ev), {}, tmp_path, ctx)
+    assert res["score"] == 0.7 and res["verdict"] == "FAIL" and res["required_failed"] == [2]
+    # no `required` key: nothing is required, a zero-weight miss does not decide the verdict
+    del ev["required"]
+    ev["params"] = [{"v": 1}, {"v": 1}, {"v": 0}]
+    res = grade(make_task(tmp_path, ev), {}, tmp_path, ctx)
+    assert res["verdict"] == "PASS" and res["required"] == [] and res["required_failed"] == []
+
+
+def test_required_and_gates_and_pending(tmp_path):
+    from osworld_science.evaluators.score import format_report
+    ctx = EvalContext(domain="d", layout=DataLayout(tmp_path))
+    # a required check behind a failed gate is blocked to zero, so it fails too
+    ev = {"func": ["_always", "_always", "_always"], "weights": [0.0, 1.0, 0.0],
+          "labels": ["gate", "value", "deliverable"], "params": [{"v": 0}, {"v": 1}, {"v": 1}],
+          "stages": [{"gate": 0, "blocks_from": 1}], "required": [0, 2]}
+    res = grade(make_task(tmp_path, ev), {}, tmp_path, ctx)
+    assert res["score"] == 0.0 and res["verdict"] == "FAIL" and res["required_failed"] == [0, 2]
+    # a pending weighted check still withholds score and verdict; a required failure is reported with it
+    ev = {"func": ["_always", "_pending", "_always"], "weights": [0.0, 1.0, 0.0],
+          "labels": ["gate", "reviewed", "deliverable"], "params": [{"v": 1}, {}, {"v": 0}], "required": [2]}
+    res = grade(make_task(tmp_path, ev), {}, tmp_path, ctx)
+    assert res["score"] is None and res["verdict"] is None and res["provisional_score"] == 0.0
+    assert res["pending"] == [{"index": 1, "reason": "review required"}] and res["required_failed"] == [2]
+    assert "PENDING" in format_report(res) and "required check(s) failed: [2]" in format_report(res)
+    # a required check that answers "not yet" has not failed: it withholds the verdict even at weight 0
+    ev = {"func": ["_always", "_pending"], "weights": [1.0, 0.0], "labels": ["a", "b"],
+          "params": [{"v": 1}, {}], "required": [1]}
+    res = grade(make_task(tmp_path, ev), {}, tmp_path, ctx)
+    assert res["verdict"] is None and res["pending"] == [{"index": 1, "reason": "review required"}]
+    assert res["required_failed"] == [] and res["provisional_score"] == 1.0
+
+
+def test_sas_or_r_program_accepts_ordinary_renderings(tmp_path):
+    """The program check decides the verdict where a task lists it in `required`, so it
+    may tell the language but not dock a style (the stat suite's must-pass variants)."""
+    from osworld_science.evaluators.registry import get
+    fn = get("sas_or_r_program")
+    ctx = EvalContext(domain="d", layout=DataLayout(tmp_path))
+    params = {"file": "program.txt", "min_bytes": 40, "must_match": [r"glm|proc\s+logistic", "caliper"]}
+
+    def verdict(text: str):
+        (tmp_path / "program.txt").write_text(text)
+        score, detail = fn(tmp_path, params, {}, ctx)
+        return bool(score), detail["language"]
+
+    r_prog = 'd <- read.csv("ontario_a.csv")\nfit <- glm(trtm ~ stent, family = binomial(), data = d)\n# caliper matching\n'
+    assert verdict(r_prog) == (True, "R")
+    assert verdict(r_prog.replace("family = binomial()", 'family = "binomial"')) == (True, "R")
+    assert verdict(r_prog.replace("binomial()", 'binomial(link = "logit")').replace("read.csv(", "readr::read_csv(")) == (True, "R")
+    assert verdict(r_prog.replace("read.csv(", "data.table::fread(")) == (True, "R")
+    sas = ('proc import datafile="ontario_a.csv" out=coh dbms=csv replace; run;\n'
+           "proc logistic data=coh descending; model trtm = stent; run;\n/* caliper matching */\n")
+    assert verdict(sas) == (True, "SAS")
+    assert verdict(sas.replace("proc import", "data coh; infile").replace("out=coh dbms=csv replace", "dsd")) == (True, "SAS")
+    # Python is still refused, with or without the R-looking calls, and so is a program that fits nothing
+    py = ("import pandas as pd\nimport statsmodels.api as sm\nd = pd.read_csv('ontario_a.csv')\n"
+          "fit = sm.GLM(y, X, family=sm.families.Binomial()).fit()  # glm( caliper\n")
+    assert verdict(py) == (False, "unknown")
+    assert verdict("# logistic caliper match strat smd\n" * 20) == (False, "unknown")
+    assert verdict(r_prog.replace("caliper", "radius"))[0] is False        # a must_match pattern is missing
+
+
+# The four tests below came with the public repository's `evaluator.required` change and are kept
+# as written; the two `required` tests above cover the same rule together with pending checks.
 def _required_ev(artifact: float, main: float = 1.0) -> dict:
     # the shape the revised tasks use: [gate (w 0), main metric (w 1), required artifact (w 0)]
     return {"func": ["_always", "_always", "_always"], "weights": [0.0, 1.0, 0.0],

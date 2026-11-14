@@ -1,23 +1,61 @@
 # Model registry. Local names (keys under `models:`) are directory and column names and must
-# not contain '/'. `model_id` is what the upstream receives. Prices are USD per 1M tokens;
-# null = unknown (cost_usd is recorded as null). `max_out` caps the reply length the caller
-# will request when doubling after a truncated reply. `provider_order` only means something
-# on OpenRouter. `agent: kimi` selects the tool-calling KimiAgent instead of the PromptAgent.
+# not contain '/'. `model_id` is what the upstream receives. `max_out` caps the reply length the
+# caller will request when doubling after a truncated reply. `provider_order` only means
+# something on OpenRouter.
+#
+# ── Prices and cost ──
+# `price` is USD per 1M tokens: `in` (uncached prompt), `out` (completion, reasoning included),
+# `cache_read` (prompt tokens served from the provider's cache), `cache_write` (prompt tokens
+# written to it; Anthropic: 5-minute writes) and `cache_write_1h` (Anthropic 1-hour writes).
+# null = unknown: without in/out the cost is recorded as null; a missing cache rate is billed
+# at `in` (no discount assumed). Cache prices are OpenRouter's endpoint prices (2026-10-10) for
+# the provider a route uses: the pinned provider on OpenRouter, the matching provider (Azure,
+# Anthropic, Google AI Studio, Alibaba, Moonshot AI) for a direct route. Long-context price
+# tiers (OpenAI > 272k, Gemini > 200k, Qwen > 256k prompt tokens) are not modelled.
+#
+# `cost` says how a cell's cost_usd is computed (llm/usage.py):
+#   api     the cost the API returns per call (OpenRouter `usage.cost`; with bring-your-own-key
+#           routes, plus `cost_details.upstream_inference_cost`). A call without one is priced
+#           statically and counted in n_calls_cost_estimated. Only backends with
+#           `usage_include: true` return a cost.
+#   static  `price` × tokens per token class: uncached input × in + cache reads × cache_read +
+#           cache writes × cache_write + output × out.
+# The static estimate is recorded on every cell as well (cost_usd_static), for comparison.
+#
+# A backend's `base_url` is the API root; the path is added by the agent harness according
+# to the `api` in its config under configs/agents/ (chat_completions → /chat/completions,
+# responses → /responses). Anthropic backends always speak /v1/messages.
+#
+# `agents` lists the agent harnesses a model can run under (configs/agents/<agent>.yaml) and
+# `default_agent` is the one `osci run` uses when --agent is not given. `openai-cua` needs an
+# endpoint that serves the Responses API (Azure/OpenAI, OpenRouter); `claude-cua` needs the
+# Anthropic Messages API with the computer toolset; Moonshot's own API serves neither, and
+# kimi-k3 only runs under its own tool-calling agent.
+#
+# `codex` runs the installed Codex CLI (`codex exec`) with the desktop as an MCP server. Codex
+# speaks the Responses API only (its chat wire API was removed), so the same backends as
+# `openai-cua` qualify: Azure/OpenAI v1 and OpenRouter. The key travels as the backend's
+# key_env; Azure also gets its api-key header. Codex's bundled model catalog knows the gpt-5.x /
+# gpt-6 slugs (context window, reasoning levels, image input); any other model_id runs on its
+# fallback metadata (272k context, text+image, reasoning summary auto) and may have its reasoning
+# parameters rejected upstream, which `osci preflight` (one real `codex exec` turn) reports.
+# OpenRouter's `provider_order` cannot be passed through Codex. Not for Anthropic routes, Google's
+# and DashScope's compatible endpoints (chat/completions only) or Moonshot.
 
 backends:
   azure:
     kind: openai_chat
-    url: "${OPENAI_BASE_URL}/openai/v1/chat/completions"
+    base_url: "${OPENAI_BASE_URL}/openai/v1"
     key_env: OPENAI_API_KEY
     max_tokens_field: max_completion_tokens
     reasoning_style: openai            # reasoning_effort: <effort>
   anthropic:
     kind: anthropic_messages
-    url: "${ANTHROPIC_BASE_URL}/v1/messages"
+    base_url: "${ANTHROPIC_BASE_URL}"
     key_env: ANTHROPIC_API_KEY
   openrouter:
     kind: openai_chat
-    url: "${OPENROUTER_CHAT_URL:-https://openrouter.ai/api/v1/chat/completions}"
+    base_url: "${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}"
     key_env: OPENROUTER_API_KEY
     max_tokens_field: max_tokens
     reasoning_style: openrouter        # reasoning: {effort: <effort>}
@@ -25,17 +63,17 @@ backends:
     supports_provider_order: true
   google:
     kind: openai_chat
-    url: "${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}/chat/completions"
+    base_url: "${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}"
     key_env: GEMINI_API_KEY
     max_tokens_field: max_tokens
   qwen:
     kind: openai_chat
-    url: "${QWEN_BASE_URL}/chat/completions"
+    base_url: "${QWEN_BASE_URL}"
     key_env: QWEN_API_KEY
     max_tokens_field: max_tokens
   moonshot:
     kind: openai_chat
-    url: "${MOONSHOT_BASE_URL:-https://api.moonshot.ai/v1}/chat/completions"
+    base_url: "${MOONSHOT_BASE_URL:-https://api.moonshot.ai/v1}"
     key_env: MOONSHOT_API_KEY
     max_tokens_field: max_tokens
 
@@ -44,107 +82,208 @@ models:
     backend: azure
     model_id: gpt-5.6-sol
     reasoning: true
-    price: {in: 5.00, out: 30.00}
+    # Azure reports prompt_tokens_details.{cached_tokens, cache_write_tokens}. Cache prices: OpenRouter's
+    # Azure endpoint, which lists in/out at 4.00/20.00 (OpenAI direct 2.00/10.00); in/out here differ.
+    price: {in: 4.00, out: 20.00, cache_read: 0.40, cache_write: 5.00}
+    cost: static
     max_out: 128000
+    agents: [prompt, openai-cua, codex]
+    default_agent: openai-cua
   gpt-5.6-terra:
     backend: azure
     model_id: gpt-5.6-terra
     reasoning: true
-    price: {in: 2.00, out: 12.00}
+    price: {in: 2.00, out: 12.00, cache_read: 0.20, cache_write: 2.50}
+    cost: static
     max_out: 128000
+    agents: [prompt, openai-cua, codex]
+    default_agent: openai-cua
   gpt-5.6-luna:
     backend: azure
     model_id: gpt-5.6-luna
     reasoning: true
-    price: {in: 0.20, out: 1.20}
+    price: {in: 0.20, out: 1.20, cache_read: 0.02, cache_write: 0.25}
+    cost: static
     max_out: 128000
+    agents: [prompt, openai-cua, codex]
+    default_agent: openai-cua
   gpt-6-astra:
     backend: azure
     model_id: gpt-6-astra
     reasoning: true
-    price: {in: 10.00, out: 50.00}
+    price: {in: 10.00, out: 50.00, cache_read: 1.00, cache_write: 12.50}
+    cost: static
     max_out: 128000
+    agents: [prompt, openai-cua, codex]
+    default_agent: openai-cua
   claude-opus-5:
     backend: anthropic
     model_id: claude-opus-5
-    price: {in: 5.00, out: 25.00}
+    # usage.cache_read_input_tokens / cache_creation_input_tokens. The PromptAgent sends no cache_control,
+    # so its reads stay 0; claude-cua marks the system prompt and the last turns cacheable.
+    price: {in: 5.00, out: 25.00, cache_read: 0.50, cache_write: 6.25, cache_write_1h: 10.00}
+    cost: static
     max_out: 128000
+    agents: [prompt, claude-cua]       # no Responses API on the Messages route (no openai-cua); claude-cua = computer toolset
+    default_agent: claude-cua
   claude-sonnet-5:
     backend: anthropic
     model_id: claude-sonnet-5
-    price: {in: 2.00, out: 10.00}
+    price: {in: 2.00, out: 10.00, cache_read: 0.20, cache_write: 2.50, cache_write_1h: 4.00}
+    cost: static
     max_out: 128000
+    agents: [prompt, claude-cua]
+    default_agent: claude-cua
   claude-fable-5-1:
     backend: anthropic
     model_id: claude-fable-5-1
-    price: {in: 10.00, out: 50.00}
+    # OpenRouter id anthropic/claude-fable-5.1
+    price: {in: 10.00, out: 50.00, cache_read: 0.25, cache_write: 12.50, cache_write_1h: 20.00}
+    cost: static
     max_out: 128000
+    agents: [prompt, claude-cua]
+    default_agent: claude-cua
   gemini-3.1-pro:
     backend: google
     model_id: gemini-3.1-pro-preview
-    price: {in: 2.00, out: 12.00}
+    # Google's implicit cache reports prompt_tokens_details.cached_tokens on a hit and no write field,
+    # so cache_write is never applied on this route
+    price: {in: 2.00, out: 12.00, cache_read: 0.20, cache_write: 0.375}
+    cost: static
     max_out: 65536
+    agents: [prompt]                   # Google's OpenAI-compatible endpoint serves chat/completions only
+    default_agent: prompt
   qwen3.7-plus:
     backend: qwen
     model_id: qwen3.7-plus
-    price: {in: 0.32, out: 1.28}
+    # DashScope reports prompt_tokens_details.cached_tokens (hits seen in 1027 of 2590 recorded requests)
+    price: {in: 0.32, out: 1.28, cache_read: 0.064, cache_write: 0.40}
+    cost: static
     max_out: 131072
+    agents: [prompt]                   # DashScope's compatible mode serves chat/completions only
+    default_agent: prompt
   qwen-cua:
     backend: qwen
     model_id: qwen-cua
-    price: {in: 0.32, out: 1.28}     # same as qwen3.7-plus
+    # in/out: same as qwen3.7-plus. No cache price: qwen-cua is not on OpenRouter, and DashScope returned
+    # prompt_tokens_details in only 651 of 3070 recorded requests and never a cache hit; any cached
+    # tokens would be billed at `in`.
+    price: {in: 0.32, out: 1.28, cache_read: null, cache_write: null}
+    cost: static
     max_out: 131072
+    agents: [prompt]
+    default_agent: prompt
   minimax-m3:
     backend: openrouter
     model_id: minimax/minimax-m3
-    price: {in: 0.23, out: 0.96}
+    # cache_read: the pinned Minimax endpoint (no cache-write price listed). That endpoint lists in/out at
+    # 0.30/1.20 (0.23/0.96 is CoreWeave's); only the static comparison column uses in/out here.
+    price: {in: 0.23, out: 0.96, cache_read: 0.06}
+    cost: api
     max_out: 512000
     provider_order: [minimax]
+    agents: [prompt, openai-cua, codex]   # OpenRouter serves /responses; openai-cua runs with function tools here,
+                                       # codex on its fallback model metadata (minimax/minimax-m3 is not in its catalog)
+    default_agent: openai-cua
   kimi-k3:
     backend: moonshot
     model_id: kimi-k3
-    agent: kimi
-    price: {in: 3.00, out: 15.00}
+    # Moonshot reports prompt_tokens_details.cached_tokens (hits in 2695 of 2799 recorded requests);
+    # cache_read: OpenRouter's Moonshot AI endpoint (no cache-write price listed)
+    price: {in: 3.00, out: 15.00, cache_read: 0.30}
+    cost: static
     max_out: 131072
+    agents: [kimi]                     # Moonshot's tool-calling agent only
+    default_agent: kimi
 
   # ── OpenRouter variants ──
   kimi-k3@openrouter:
     backend: openrouter
     model_id: moonshotai/kimi-k3
-    agent: kimi
-    price: {in: 3.00, out: 15.00}
+    price: {in: 3.00, out: 15.00, cache_read: 0.30}
+    cost: api
     max_out: 943718
     provider_order: [moonshotai]
+    agents: [kimi]
+    default_agent: kimi
   gpt-5.6-sol@openrouter:
     backend: openrouter
     model_id: openai/gpt-5.6-sol
     reasoning: true
-    price: {in: 2.00, out: 10.00}
+    price: {in: 2.00, out: 10.00, cache_read: 0.20, cache_write: 2.50}
+    cost: api
     max_out: 128000
     provider_order: [openai]
+    agents: [prompt, codex]            # codex: Codex speaks /responses on OpenRouter too; the openai/ prefixed id is
+                                       # not in its catalog, so it runs on fallback metadata
+    default_agent: prompt
   gpt-5.6-terra@openrouter:
     backend: openrouter
     model_id: openai/gpt-5.6-terra
     reasoning: true
-    price: {in: 2.00, out: 12.00}
+    price: {in: 2.00, out: 12.00, cache_read: 0.20, cache_write: 2.50}
+    cost: api
     max_out: 128000
     provider_order: [openai]
+    agents: [prompt, codex]            # codex: Codex speaks /responses on OpenRouter too; the openai/ prefixed id is
+                                       # not in its catalog, so it runs on fallback metadata
+    default_agent: prompt
   gpt-5.6-luna@openrouter:
     backend: openrouter
     model_id: openai/gpt-5.6-luna
     reasoning: true
-    price: {in: 0.20, out: 1.20}
+    price: {in: 0.20, out: 1.20, cache_read: 0.02, cache_write: 0.25}
+    cost: api
     max_out: 128000
     provider_order: [openai]
+    agents: [prompt, codex]            # codex: Codex speaks /responses on OpenRouter too; the openai/ prefixed id is
+                                       # not in its catalog, so it runs on fallback metadata
+    default_agent: prompt
   gemini-3.1-pro@openrouter:
     backend: openrouter
     model_id: "~google/gemini-pro-latest"
-    price: {in: 2.00, out: 12.00}
+    price: {in: 2.00, out: 12.00, cache_read: 0.20, cache_write: 0.375}
+    cost: api
     max_out: 65536
     provider_order: [google-ai-studio, google-vertex]
+    agents: [prompt, openai-cua, codex]   # codex: fallback model metadata, preflight decides
+    default_agent: prompt
   qwen3.7-plus@openrouter:
     backend: openrouter
     model_id: qwen/qwen3.7-plus
-    price: {in: 0.32, out: 1.28}
+    price: {in: 0.32, out: 1.28, cache_read: 0.064, cache_write: 0.40}
+    cost: api
     max_out: 131072
     provider_order: [alibaba]
+    agents: [prompt, openai-cua, codex]   # codex: fallback model metadata, preflight decides
+    default_agent: prompt
+
+# ── Judges ──
+# Models that `osci judge` (and `osci run --judge`) use to review deliverables code
+# cannot grade: free-text reports, GUI trajectories. They share the backends above
+# but are a separate section so a judge never shows up as a solver column and a
+# solver is never its own reviewer. `default` names the one used when no --judge
+# is given. `vision: true` means the judge is shown page images and screenshots.
+# Judges always speak chat/completions (or Messages); they take no `agents` list.
+judges:
+  default: deepseek-v4.1-flash
+  deepseek-v4.1-flash:
+    backend: openrouter
+    model_id: deepseek/deepseek-v4.1-flash
+    # cache_read: the pinned DeepSeek endpoint, which lists in/out at 0.15/0.60 and charged exactly that
+    # in the 2026-10-09 probe (0.30/1.20 is OpenRouter's model-level price); cost: api uses the charge.
+    price: {in: 0.30, out: 1.20, cache_read: 0.003}
+    cost: api
+    max_out: 65536
+    provider_order: [deepseek]
+    vision: true
+    json_mode: true                    # ask for response_format json_object (the judge wants JSON back)
+  gpt-5.6-luna:                        # fallback judge on the Azure route, for when OpenRouter is unreachable
+    backend: azure
+    model_id: gpt-5.6-luna
+    reasoning: true
+    price: {in: 0.20, out: 1.20, cache_read: 0.02, cache_write: 0.25}
+    cost: static
+    max_out: 128000
+    vision: true
+    json_mode: true

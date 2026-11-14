@@ -3,9 +3,12 @@
 `ModelCaller(payload) -> str` takes the OpenAI-style payload the PromptAgent
 has always produced (`messages`, `max_tokens`) and speaks either
 chat/completions (Azure, OpenRouter, Google, Qwen …) or the native
-Anthropic Messages API. Retries, truncation doubling, usage accounting and
-the raw request log are a verbatim port of the legacy caller so that runs
-stay comparable.
+Anthropic Messages API. The endpoint is the backend's base_url plus the path
+of the agent's `api` (configs/agents/<agent>.yaml); this caller implements
+`chat_completions` only — the Responses API is driven by the OpenAI Agents
+SDK inside the `openai-cua` agent. Retries, truncation doubling, usage
+accounting and the raw request log are a verbatim port of the legacy caller
+so that runs stay comparable.
 """
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ import time
 import requests
 
 from .models import ResolvedModel
+from .usage import UsageMeter
 
 requests.packages.urllib3.disable_warnings()  # type: ignore[attr-defined]
 
@@ -32,9 +36,11 @@ def to_anthropic(messages: list, max_tokens: int) -> dict:
         content = []
         for p in parts:
             if p.get("type") == "image_url":
-                data = p["image_url"]["url"].split("base64,", 1)[-1]
+                url = p["image_url"]["url"]
+                data = url.split("base64,", 1)[-1]
+                media = url[5:url.index(";")] if url.startswith("data:") and ";" in url else "image/png"
                 content.append({"type": "image", "source": {
-                    "type": "base64", "media_type": "image/png", "data": data}})
+                    "type": "base64", "media_type": media, "data": data}})
             elif p.get("type") == "text":
                 content.append({"type": "text", "text": p["text"]})
         out.append({"role": msg["role"], "content": content})
@@ -82,52 +88,53 @@ class ModelCaller:
     MAX_ATTEMPTS = 4
 
     def __init__(self, model: ResolvedModel, raw_log: pathlib.Path,
-                 reasoning_effort: str = "", request_timeout: int = 300, log=print):
+                 reasoning_effort: str = "", request_timeout: int = 300, log=print,
+                 api: str = "chat_completions"):
+        if model.backend.kind != "anthropic_messages" and api != "chat_completions":
+            raise ValueError(f"ModelCaller speaks chat/completions only on {model.backend.name}; api {api!r} needs "
+                             f"an agent that drives it itself (openai-cua: Responses API through the Agents SDK; "
+                             f"claude-cua: the Messages API with the computer toolset)")
         self.model, self.raw = model, pathlib.Path(raw_log)
         self.name, self.cfg = model.name, model
+        self.api = api
+        self.url = model.endpoint(api)
         self.reasoning_effort = reasoning_effort
         self.request_timeout = request_timeout
         self.log = log
-        self.input_tokens = self.output_tokens = self.calls = 0
-        self.cached_input_tokens = 0
-        self.upstream_cost: float | None = None  # only OpenRouter reports usage.cost
+        # tokens, cache reads/writes and cost, priced per the model's `cost:` (llm/usage.py)
+        self.meter = UsageMeter.for_model(model)
+        # how the most recent request ended: {"finish", "truncated", "max_tokens", "output_tokens",
+        # "reasoning_tokens"}. An empty reply does not say why it is empty; the judge reads this
+        # to tell an allowance spent entirely on reasoning from a transport failure.
+        self.last: dict = {}
 
     # ── accounting ─────────────────────────────────────────────────────────
     def _record(self, rec: dict) -> None:
         with self.raw.open("a") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
-    def _account(self, usage: dict | None) -> None:
-        if not isinstance(usage, dict):
-            return
-        self.calls += 1
-        # Anthropic lists cache hits/writes separately from input_tokens;
-        # OpenAI-style cached_tokens are already inside prompt_tokens.
-        cached = int(usage.get("cache_read_input_tokens") or 0)
-        written = int(usage.get("cache_creation_input_tokens") or 0)
-        self.input_tokens += (int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0)
-                              + cached + written)
-        self.output_tokens += int(usage.get("completion_tokens") or usage.get("output_tokens") or 0)
-        self.cached_input_tokens += cached
-        cost = usage.get("cost")
-        if isinstance(cost, (int, float)):
-            self.upstream_cost = round((self.upstream_cost or 0.0) + float(cost), 6)
+    @property
+    def input_tokens(self) -> int:
+        return self.meter.input_tokens
+
+    @property
+    def output_tokens(self) -> int:
+        return self.meter.output_tokens
 
     @property
     def total_tokens(self) -> int:
-        return self.input_tokens + self.output_tokens
+        return self.meter.input_tokens + self.meter.output_tokens
 
-    def cost_usd(self) -> float | None:
-        p = self.model.spec.price
-        if not p or p.get("in") is None or p.get("out") is None:
-            return None
-        return round((self.input_tokens * p["in"] + self.output_tokens * p["out"]) / 1e6, 6)
+    @property
+    def cached_input_tokens(self) -> int:
+        return self.meter.cache_read_tokens
+
+    @property
+    def calls(self) -> int:
+        return self.meter.calls
 
     def token_stats(self) -> dict:
-        return {"input_tokens": self.input_tokens, "output_tokens": self.output_tokens,
-                "total_tokens": self.total_tokens, "cached_input_tokens": self.cached_input_tokens,
-                "n_llm_calls": self.calls, "cost_usd": self.cost_usd(),
-                "upstream_cost_usd": self.upstream_cost}
+        return self.meter.stats()
 
     # ── the call ───────────────────────────────────────────────────────────
     def __call__(self, payload: dict, _attempt: int = 0, _max_tokens: int | None = None) -> str:
@@ -142,7 +149,7 @@ class ModelCaller:
         try:
             if b.kind == "anthropic_messages":
                 body = {"model": m.model_id, **to_anthropic(messages, max_tokens)}
-                r = requests.post(m.url, json=body, timeout=self.request_timeout, verify=False,
+                r = requests.post(self.url, json=body, timeout=self.request_timeout, verify=False,
                                   headers={"x-api-key": m.key, "anthropic-version": "2023-06-01",
                                            "content-type": "application/json"})
                 j = json_or_raise(r)
@@ -158,6 +165,8 @@ class ModelCaller:
                     body["provider"] = {"order": list(m.spec.provider_order), "allow_fallbacks": True}
                 if b.usage_include:
                     body["usage"] = {"include": True}
+                if payload.get("response_format"):       # judges ask for JSON objects; agents never set this
+                    body["response_format"] = payload["response_format"]
                 # temperature/top_p are never sent: reasoning models reject them and
                 # every model then runs under the same (provider-default) condition.
                 if m.spec.reasoning and self.reasoning_effort:
@@ -165,7 +174,11 @@ class ModelCaller:
                         body["reasoning"] = {"effort": self.reasoning_effort}
                     else:
                         body["reasoning_effort"] = self.reasoning_effort
-                r = requests.post(m.url, json=body, timeout=self.request_timeout, verify=False,
+                # a judge bounding its reasoning on a second try (judge/client.py); agents never set this,
+                # and only OpenRouter's unified `reasoning` object has a token budget
+                if payload.get("reasoning") and b.reasoning_style == "openrouter":
+                    body["reasoning"] = payload["reasoning"]
+                r = requests.post(self.url, json=body, timeout=self.request_timeout, verify=False,
                                   headers={"Content-Type": "application/json",
                                            "Authorization": f"Bearer {m.key}", "api-key": m.key})
                 j = json_or_raise(r)
@@ -176,14 +189,21 @@ class ModelCaller:
                 resolved, provider = j.get("model"), j.get("provider")
 
             usage = j.get("usage")
+            counted = self.meter.add(usage) if isinstance(usage, dict) else None
+            details = (usage or {}).get("completion_tokens_details") if isinstance(usage, dict) else None
+            self.last = {"finish": finish, "truncated": bool(truncated), "max_tokens": max_tokens,
+                         "output_tokens": (usage or {}).get("completion_tokens", (usage or {}).get("output_tokens"))
+                         if isinstance(usage, dict) else None,
+                         "reasoning_tokens": (details or {}).get("reasoning_tokens") if isinstance(details, dict) else None}
             self._record({"model": self.name, "model_id": m.model_id, "http": r.status_code,
                           "elapsed_s": round(time.time() - t0, 1), "finish": finish,
                           "content_len": len(content or ""), "usage": usage,
+                          # normalised: cache reads/writes, reasoning tokens, the call's cost and its source
+                          "counted": counted,
                           "max_tokens": max_tokens, "resolved_model": resolved,
                           "provider": provider, "n_messages": len(messages),
                           "attempt": _attempt,
                           "error": (j.get("error") if r.status_code != 200 else None)})
-            self._account(usage)
 
             if r.status_code == 200 and content:
                 return content
@@ -192,7 +212,11 @@ class ModelCaller:
                 if nxt > max_tokens and _attempt < self.MAX_ATTEMPTS - 1:
                     self.log(f"     .. truncated, doubling max_tokens to {nxt} and retrying")
                     return self(payload, _attempt + 1, nxt)
-                self.log(f"     !! truncated at the output cap {max_tokens}; giving up this step")
+                # two different stops: the model's declared `max_out` was reached, or the doubling ran
+                # out of attempts below it (16000 -> 128000 at most); only the first is the model's cap
+                self.log(f"     !! truncated at the output cap {max_tokens}; giving up this step" if cap and max_tokens >= cap
+                         else f"     !! still truncated at max_tokens {max_tokens} after {_attempt + 1} attempts"
+                              + (f" (the model's cap is {cap})" if cap else "") + "; giving up this step")
                 return ""
             self.log(f"     !! unexpected response http={r.status_code} finish={finish} "
                      f"body={json.dumps(j, ensure_ascii=False)[:160]}")
@@ -201,6 +225,8 @@ class ModelCaller:
             self._record({"model": self.name, "exception": f"{type(e).__name__}: {e}",
                           "elapsed_s": round(time.time() - t0, 1), "n_messages": len(messages),
                           "attempt": _attempt, **scene})
+            self.last = {"finish": None, "truncated": False, "max_tokens": max_tokens,
+                         "error": f"{type(e).__name__}: {e}"[:200]}
             self.log(f"     .. request failed {type(e).__name__}"
                      + (f" http={scene['http']} body={scene['body_head'][:80]!r}" if scene else ""))
         if _attempt < self.MAX_ATTEMPTS - 1:

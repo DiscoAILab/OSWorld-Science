@@ -22,6 +22,10 @@ import urllib.request
 import uuid
 
 UPLOAD_CHUNK = 50_000  # 200k returns HTTP 500; 50k is the measured limit
+# What `Guest.glob` runs in the guest: the regular files a pattern matches, as one JSON list
+# (names with spaces or newlines survive; a shell `ls` would not carry them).
+GLOB_SNIPPET = ("import glob, json, os, sys\n"
+                "print(json.dumps(sorted(p for p in glob.glob(sys.argv[1]) if os.path.isfile(p))))")
 
 
 class GuestUnreachable(RuntimeError):
@@ -77,6 +81,22 @@ class Guest:
     def file_exists(self, guest_path: str) -> bool:
         probe = self.execute(["bash", "-c", f"test -f {q(guest_path)} && echo YES || echo NO"])
         return "YES" in (probe.get("output") or "")
+
+    def glob(self, pattern: str, timeout: int = 120) -> list[str]:
+        """Guest paths of the regular files matching `pattern` (Python `glob` rules: `*`, `?`,
+        `[...]`; no `**` recursion, dotfiles only when the pattern names the dot), sorted.
+        Expanded by the guest's own python3, so like `pull` and `upload` it needs a POSIX guest.
+        Raises RuntimeError when the guest cannot produce the list."""
+        r = self.execute(["python3", "-c", GLOB_SNIPPET, pattern], timeout)
+        try:
+            found = json.loads((r.get("output") or "").strip())
+            if not isinstance(found, list):
+                raise ValueError("not a list")
+        except ValueError:
+            what = ((r.get("output") or "") + (r.get("error") or "")).strip()[-200:]
+            raise RuntimeError(f"could not list {pattern!r} in the guest "
+                               f"(rc={r.get('returncode')}): {what!r}") from None
+        return [str(x) for x in found]
 
     def pull(self, guest_path: str, dest: pathlib.Path) -> bool:
         """Form-encoded, not JSON. See the module docstring."""
@@ -148,19 +168,21 @@ class Guest:
         return out[0] if out else None
 
     # ── liveness / observation ─────────────────────────────────────────────
-    def alive(self) -> bool:
+    def alive(self, require_display: bool = True) -> bool:
+        """Is the guest answering? With `require_display` (boot and staging) the display must
+        deliver a screenshot too; without it (collecting results) a plain command suffices,
+        so a guest whose X server has stopped accepting clients still hands its files over."""
+        if require_display:
+            return self.screenshot(timeout=8) is not None
         try:
-            with urllib.request.urlopen(f"{self.host}/screenshot", timeout=8) as r:
-                return r.status == 200
-        except Exception:  # noqa: BLE001
+            return self.execute(["true"], timeout=8).get("returncode") == 0
+        except GuestUnreachable:
             return False
 
     def screenshot(self, timeout: int = 60) -> bytes | None:
-        try:
-            with urllib.request.urlopen(f"{self.host}/screenshot", timeout=timeout) as r:
-                return r.read() if r.status == 200 else None
-        except Exception:  # noqa: BLE001
-            return None
+        """Through /execute, not the server's /screenshot endpoint (guest/screenshot.py)."""
+        from .screenshot import capture
+        return capture(self.host, timeout=timeout)
 
     def windows(self, timeout: int = 20) -> str:
         """`wmctrl -lx` — window list with WM_CLASS (titles are unreliable:

@@ -43,8 +43,13 @@ def sas_or_r_program(sub: Path, params: dict, gt: dict, ctx: EvalContext):
     if len(txt.encode()) < params.get("min_bytes", 1):
         return 0.0, {"error": "program is too short"}
 
-    r_markers = [r"\bglm\s*\(", r"family\s*=\s*binomial", r"\bread\.csv\s*\("]
-    sas_markers = [r"\bproc\s+logistic\b", r"\bdata\s+[A-Za-z_]", r"\brun\s*;"]
+    # The markers say which language the program is in, not how it must be styled: now that
+    # the tasks list this check in `evaluator.required` it decides the verdict, so every
+    # ordinary rendering has to count (family = "binomial", binomial(link = "logit"), the
+    # readr and data.table readers; a SAS program that reads with PROC IMPORT, no DATA step).
+    r_markers = [r"\bglm\s*\(", r"family\s*=\s*[\"']?binomial",
+                 r"\b(?:read\.(?:csv2?|table|delim)|read_csv|read_delim|fread)\s*\("]
+    sas_markers = [r"\bproc\s+logistic\b", r"\b(?:data\s+[A-Za-z_]|proc\s+import\b)", r"\brun\s*;"]
     is_r = all(re.search(rx, txt, re.I) for rx in r_markers)
     is_sas = all(re.search(rx, txt, re.I) for rx in sas_markers)
     forbidden = [rx for rx in (r"\bstatsmodels\b", r"\bsklearn\b", r"\bpandas\b")
@@ -166,7 +171,7 @@ def _load_sqlite(con: sqlite3.Connection, tables: dict[str, Path]) -> None:
 
 @register("sql_query_replay")
 def sql_query_replay(sub: Path, params: dict, gt: dict, ctx: EvalContext):
-    """Execute the submitted SELECT against BOTH shipped datasets."""
+    """Execute the submitted SELECT against each data set the task lists."""
     qf = sub / params["file"]
     if not qf.exists():
         return 0.0, {"error": f"missing file: {params['file']}"}
@@ -200,7 +205,9 @@ def sql_query_replay(sub: Path, params: dict, gt: dict, ctx: EvalContext):
         finally:
             con.close()
 
-        expected = gt["datasets"][tag]["table"]
+        # The expected tables live in the block the task names (`gt_block`, e.g. the
+        # held-out "replay" block of stat_qol_sql); "datasets" is the default.
+        expected = gt[params.get("gt_block", "datasets")][tag]["table"]
         colmap = index_columns(names)
         missing = [c for c in columns if normalise_key(c) not in colmap]
         if missing:

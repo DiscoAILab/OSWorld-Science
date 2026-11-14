@@ -188,6 +188,12 @@ class VM:
         r = self.docker("inspect", "-f", "{{.State.Status}}", self.name)
         return r.stdout.strip() if r.returncode == 0 else None
 
+    def container_id(self) -> str | None:
+        """The full Docker id of this guest's container: provenance that ties a collected
+        submission and its trajectory to one container, whatever the name is reused for later."""
+        r = self.docker("inspect", "-f", "{{.Id}}", self.name)
+        return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
+
     def backing_image(self) -> Path | None:
         r = self.docker("inspect", "-f",
                         '{{range .Mounts}}{{if eq .Destination "/System.qcow2"}}{{.Source}}{{end}}{{end}}',

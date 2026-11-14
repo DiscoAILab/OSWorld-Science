@@ -92,6 +92,7 @@ def test_grader_suite(domain, tmp_path_factory):
         assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
     suites = sorted((root / "tests").glob("run_tests*.py"))
     assert suites, "no run_tests*.py in the suite root"
+    skipped: list[str] = []
     for suite in suites:
         args = [sys.executable, str(suite)]
         if domain == "eeg":
@@ -103,6 +104,11 @@ def test_grader_suite(domain, tmp_path_factory):
         r = subprocess.run(args, cwd=root, env=env, capture_output=True, text=True, timeout=7200)
         tail = f"[{suite.name}]\n" + r.stdout[-3000:] + r.stderr[-1500:]
         assert r.returncode == 0, tail
+        if r.stdout.startswith("SKIPPED:"):
+            # a suite whose grader needs host provisioning this machine lacks (an optional
+            # extra, a sandbox image) says so on its first line instead of failing
+            skipped.append(f"{suite.name}: {r.stdout.splitlines()[0]}")
+            continue
         # stat prints "N/N checks behaved as intended"; biomed/linguistics/geoscience print
         # "ALL BEHAVED AS INTENDED"; chem prints "0 unexpected"; in physics the CIAO authors'
         # suites print "ALL TESTS PASSED" / "ALL SUITES PASSED" and the Ansys suite
@@ -111,3 +117,5 @@ def test_grader_suite(domain, tmp_path_factory):
         assert any(p in low for p in ("behaved as intended", "all pass", "0 unexpected",
                                       "all tests passed", "all suites passed",
                                       " 0 failure(s) in total")), tail
+    if skipped and len(skipped) == len(suites):
+        pytest.skip("; ".join(skipped))

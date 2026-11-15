@@ -314,3 +314,21 @@ snapshots:
     container_prefix: osci_ansys
     ram: 12G
     cpus: 4
+
+  ubuntu_profex:
+    description: "Materials science / powder XRD: Profex 5.7.2 (official Linux bundle, pinned) with BGMN 4.2.23d and its bundled structure database under /opt/Profex5, on the OSWorld Ubuntu 22.04 base; the COD database is not installed; gedit and wmctrl; 1920x1080. Built by scripts/vm_prep/profex/build_image.sh, whose prepare_runtime.sh gives the Profex binaries the newer glibc/GCC runtimes they need under /opt/Profex5/compat."
+    domain: materials
+    image: ubuntu_profex.qcow2
+    default_port: 5180
+    container_prefix: osci_mat
+    tools_probe: "test -x /opt/Profex5/profex.sh && test -f /opt/Profex5/.osci-install-ok && command -v profex"
+    provision: scripts/vm_prep/profex/provision_guest.sh
+    pre_task_hooks: []
+    check_commands: [profex, python3, gedit, wmctrl]
+    bake_cleanup: "rm -rf /home/user/work /home/user/assets /home/user/.cache/thumbnails /home/user/.local/share/recently-used.xbel /home/user/.bash_history"
+    window_classes:
+      profex: profex
+      gedit: gedit
+      gnome-terminal: terminal
+      xterm: terminal
+      nautilus: files

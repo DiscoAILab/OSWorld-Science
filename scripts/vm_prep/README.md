@@ -25,7 +25,8 @@ scripts/vm_prep/
 │                 hoosier_phonotactics_lab1 grader, not a guest image)
 ├── eeg/          provision_guest.sh (in-guest script: apt octave + octave-signal/statistics,
 │                 git clone EEGLAB 2025.1.0 → /opt/eeglab)
-└── econ/         provision_guest.sh → econ_setup.py (apt gretl 2022a + libreoffice-calc; LibreOffice first-run dialogs off)
+├── econ/         provision_guest.sh → econ_setup.py (apt gretl 2022a + libreoffice-calc; LibreOffice first-run dialogs off)
+└── profex/       provision_guest.sh → install_guest.sh + prepare_runtime.sh + profex_setup.py (Profex 5.7.2 + BGMN)
 ```
 
 The 10 EEGLAB tasks are published under `data/eeg`, but an
@@ -46,6 +47,7 @@ scripts/vm_prep/radiology/build_image.sh     # port 5050
 scripts/vm_prep/linguistics/build_image.sh   # port 5080
 scripts/vm_prep/linguistics/build_rkward_image.sh   # ~15 min; port 5160; then move vm/images/ubuntu_rkward.* to data/linguistics/vm/
 scripts/vm_prep/econ/build_image.sh          # port 5170
+scripts/vm_prep/profex/build_image.sh        # port 5180
 ```
 
 Discipline: **reset, install, bake**. `osci vm bake` refuses a guest that

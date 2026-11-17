@@ -21,7 +21,7 @@ Evaluator = Callable[[Path, dict, dict, "EvalContext"], tuple[float, dict]]
 REGISTRY: dict[str, Evaluator] = {}
 _BUILTIN = ("osworld_science.evaluators.common", "osworld_science.evaluators.stat",
             "osworld_science.evaluators.radiology", "osworld_science.evaluators.linguistics",
-            "osworld_science.evaluators.external")
+            "osworld_science.evaluators.external", "osworld_science.evaluators.xrd")
 _loaded = False
 
 

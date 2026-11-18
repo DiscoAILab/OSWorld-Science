@@ -78,7 +78,7 @@ def _suite_root(tmp_path_factory, domain: str) -> Path | None:
 
 
 @pytest.mark.data
-@pytest.mark.parametrize("domain", ["linguistics", "biomed", "chem", "eeg", "stat", "geoscience", "physics", "materials"])
+@pytest.mark.parametrize("domain", ["linguistics", "biomed", "chem", "eeg", "stat", "geoscience", "physics", "materials", "econ"])
 def test_grader_suite(domain, tmp_path_factory):
     root = _suite_root(tmp_path_factory, domain)
     if root is None:

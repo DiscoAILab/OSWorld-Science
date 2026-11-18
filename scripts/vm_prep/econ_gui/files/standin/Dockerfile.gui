@@ -1,0 +1,38 @@
+# GUI-only desktop for economics: JDemetra+ 3.9.0 and GeoDa 1.22.1 on the osci-econ base (xfce, LibreOffice).
+# Everything that can run arbitrary commands from the desktop is removed: terminal emulators, the xfce run dialog
+# (appfinder), Thunar (its "open with custom command"), gretl (console), LibreOffice macros. JDemetra+ runs on a
+# jlink'd Java runtime without compiler/jshell modules; jwsacruncher (for the grader only) is root-only.
+FROM ubuntu:24.04 AS jre
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu|http://mirrors.cloud.aliyuncs.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|http://mirrors.cloud.aliyuncs.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources \
+ && apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+ && apt-get update && apt-get install -y --no-install-recommends openjdk-21-jdk-headless binutils && rm -rf /var/lib/apt/lists/*
+RUN MODS=$(java --list-modules | sed 's/@.*//' | grep -v -E '^(jdk\.compiler|jdk\.jshell|jdk\.jdeps|jdk\.javadoc|jdk\.jartool|jdk\.jlink|jdk\.jdi|jdk\.jdwp\.agent|jdk\.jpackage|jdk\.hotspot\.agent|jdk\.internal\.ed|jdk\.internal\.le|jdk\.internal\.opt|jdk\.editpad|jdk\.jstatd|jdk\.jconsole|jdk\.javadoc|java\.compiler|jdk\.attach|jdk\.jcmd|jdk\.internal\.jvmstat|jdk\.random)$' | paste -sd, -) \
+ && jlink --add-modules "$MODS" --strip-debug --no-header-files --no-man-pages --output /opt/jre-jd \
+ && /opt/jre-jd/bin/java --list-modules | grep -c . && ! /opt/jre-jd/bin/java --list-modules | grep -E 'jdk\.compiler|jdk\.jshell'
+
+FROM osci-econ:latest
+USER root
+COPY --from=jre /opt/jre-jd /opt/jre-jd
+COPY jdplus-main-desktop-bin-3.9.0.zip jdplus-main-cli-bin-3.9.0.zip geoda_1.22.1-1noble1_amd64.deb /tmp/
+RUN apt-get update && apt-get install -y --no-install-recommends unzip /tmp/geoda_1.22.1-1noble1_amd64.deb \
+ && cd /opt && unzip -q /tmp/jdplus-main-desktop-bin-3.9.0.zip && mkdir -p /opt/grader && cd /opt/grader && unzip -q /tmp/jdplus-main-cli-bin-3.9.0.zip \
+ && rm /tmp/*.zip /tmp/*.deb \
+ && chmod +x /opt/nbdemetra/bin/nbdemetra /opt/grader/jwsacruncher-3.9.0/bin/jwsacruncher \
+ && sed -i 's|^#*jdkhome=.*|jdkhome="/opt/jre-jd"|' /opt/nbdemetra/etc/nbdemetra.conf && grep -q '^jdkhome="/opt/jre-jd"' /opt/nbdemetra/etc/nbdemetra.conf \
+ && ln -s /opt/nbdemetra/bin/nbdemetra /usr/local/bin/jdemetra \
+ && printf '[Desktop Entry]\nName=JDemetra+\nExec=/opt/nbdemetra/bin/nbdemetra\nType=Application\nTerminal=false\nCategories=Office;\n' > /usr/share/applications/jdemetra.desktop \
+ && chown -R root:root /opt/grader && chmod 700 /opt/grader
+RUN apt-get update && apt-get install -y --no-install-recommends libpcre2-32-0 && rm -rf /var/lib/apt/lists/* && ! ldd /usr/local/geoda/GeoDa | grep "not found"
+RUN apt-get purge -y xfce4-terminal xfce4-appfinder thunar gretl gretl-common gretl-data \
+ && apt-get autoremove -y && rm -rf /var/lib/apt/lists/* \
+ && rm -f /usr/bin/xterm /usr/bin/x-terminal-emulator /usr/bin/gnome-terminal /usr/bin/uxterm /usr/bin/lxterm /usr/bin/exo-open \
+ && rm -f /etc/sudoers.d/user && (deluser user sudo || true) \
+ && ! command -v xfce4-terminal && ! command -v thunar && ! command -v gretl && ! command -v xfce4-appfinder \
+ && rm -f /usr/bin/xfce4-settings-manager /usr/bin/xfce4-keyboard-settings /usr/bin/xfce4-panel-profiles /usr/bin/xfce4-mime-settings /usr/bin/xfce4-run /usr/bin/xdg-terminal \
+ && mkdir -p /etc/xdg/xfce4/kiosk && printf "[xfce4-panel]\nCustomizePanel=NONE\n[xfce4-session]\nCustomizeSplash=NONE\nCustomizeChooser=NONE\nCustomizeLogout=NONE\nCustomizeCompatibility=NONE\nCustomizeSecurity=NONE\n" > /etc/xdg/xfce4/kiosk/kioskrc
+# LibreOffice: macros disabled (security level 3, execution off)
+COPY registrymodifications.xcu /home/user/.config/libreoffice/4/user/registrymodifications.xcu
+RUN mkdir -p /home/user/.config/xfce4/xfconf/xfce-perchannel-xml /home/user/Desktop /home/user/Documents \
+ && printf '<?xml version="1.0" encoding="UTF-8"?>\n<channel name="xfce4-keyboard-shortcuts" version="1.0">\n  <property name="commands" type="empty">\n    <property name="default" type="empty"/>\n    <property name="custom" type="empty">\n      <property name="override" type="bool" value="true"/>\n    </property>\n  </property>\n</channel>\n' > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-keyboard-shortcuts.xml \
+ && chown -R user:user /home/user
+USER user

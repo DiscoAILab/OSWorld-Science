@@ -332,3 +332,24 @@ snapshots:
       gnome-terminal: terminal
       xterm: terminal
       nautilus: files
+  ubuntu_econ_gui:
+    description: "GUI-only economics desktop for the research-software tasks (ECON-040 … ECON-059): JDemetra+ 3.9.0 (seasonal adjustment), GeoDa 1.22.1 (spatial analysis), Portfolio Performance 0.89.0 (investment performance), NetLogo 7.0.4 (agent-based models) and LibreOffice Calc 24.2 on Ubuntu 24.04 + Xfce, 1920x1080. Built from the Ubuntu 24.04 cloud image by scripts/vm_prep/econ_gui/build_image.sh, a port of the Docker stand-in the tasks were developed and run on. Nothing on the desktop runs a command line (no terminal, run dialog, file manager, URL chooser, settings manager or keyboard-shortcut editor; LibreOffice macros off; NetLogo without py/sr); JDemetra+ and Portfolio Performance run on a Java runtime without compiler or jshell. The graders' engines (jwsacruncher 3.9.0, Portfolio Performance reference classes) are in root-only /opt/grader and are reached by the evaluator commands with sudo -n. The tasks declare gui_only: the agent's actions must be limited to mouse and keyboard on the runner side (see scripts/vm_prep/econ_gui/README.md). No network at run time by design."
+    domain: econ
+    image: ubuntu_econ_gui.qcow2
+    default_port: 5190
+    container_prefix: osci_econgui
+    tools_probe: "command -v jdemetra && command -v portfolio && command -v netlogo && test -x /usr/bin/run_geoda.sh && command -v libreoffice"
+    provision: null
+    pre_task_hooks: []
+    check_commands: [jdemetra, portfolio, netlogo, run_geoda.sh, libreoffice, eog, mousepad, python3]
+    bake_cleanup: "pkill -x java 2>/dev/null; pkill -x GeoDa 2>/dev/null; pkill -x NetLogo 2>/dev/null; pkill -x soffice.bin 2>/dev/null; chmod -R u+w /home/user/work 2>/dev/null; rm -rf /home/user/work /home/user/assets /home/user/.nbdemetra /home/user/.cache/nbdemetra /home/user/.PortfolioPerformance /home/user/.java/.userPrefs /home/user/.config/libreoffice/4/user/registrymodifications.xcu.bak /home/user/.local/share/recently-used.xbel /home/user/.cache/thumbnails; mkdir -p /home/user/work /home/user/assets"
+    window_classes:
+      jdemetra: jdemetra
+      geoda: geoda
+      portfolio performance: portfolio
+      portfolioperformance: portfolio
+      netlogo: netlogo
+      libreoffice: libreoffice
+      soffice: libreoffice
+      eog: eog
+      mousepad: mousepad

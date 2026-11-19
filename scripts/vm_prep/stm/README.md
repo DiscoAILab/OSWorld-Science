@@ -5,10 +5,7 @@ scanning tunnelling microscope, for the three P4 tasks (`stm_p4_atom_01..03`, Ei
 through the screen; a separate account runs the instrument and holds the hidden world of each task; the host grades the
 episode by replaying its exported records in a container. This directory builds both halves.
 
-Status (2026-11-16): written against the runner's public sources. The guest installer and launcher were run, as far as
-a rootless container allows, in an `ubuntu:22.04` container; the grader image was built and run with rootless podman.
-Nothing here has run in the OSWorld base image, under the runner (`osci`), on KVM, in a GNOME session, or in
-the runner's Docker. "What is not tested" below is exact.
+Status (2026-11-18): validated end-to-end on KVM + Docker (`ubuntu-24.04` host with `/dev/kvm` and `happysixd/osworld-docker`). `build_image.sh` booted the OSWorld `Ubuntu.qcow2` base on port 5190, ran `provision_guest.sh` with `--smoke` (capturing `stm_smoke.png` on the 1920x1080 GNOME desktop, checking `wmctrl -lx` for `stmbench-gui`, and resetting cleanly via `stm-bench-reset`), passed `osci vm check`, and baked `ubuntu_stm.qcow2`. `build_grader.sh` built `stmbench-grader:1740614e53db` on Docker and passed all 57 cases in `tests/grader/test_grader_suites.py -k stm` as non-root `grader` (uid 10001, `--network none`). `osci run --agent prompt` (`max_steps=250`) cold-started `data/stm/vm/ubuntu_stm.qcow2`, staged `stm_p4_atom_01` (`stm-lockdown`, `stm-start`, `sleep 3`), ran `PromptAgent` steps (`pyautogui` + `/screenshot`), collected all four `/var/lib/stm-bench/export/*` files via `/file`, graded via Docker, and confirmed `user` is denied `sudo`, `pkexec`, and `/var/lib/stm-bench/private`.
 
 ## Files
 
@@ -130,24 +127,16 @@ autostart entry (`xhost +SI:localuser:stm`: the service account may draw on the 
 software needs). `apt-get install` adds missing libraries (no upgrades of installed packages are requested). Not
 tested on a unified image: none was available.
 
-## Does anything after the config steps use sudo in the guest? (runner sources read 2026-11-16)
+## Does anything after the config steps use sudo in the guest? (verified 2026-11-18)
 
-Not in `src/osworld_science/harness/` (stage, collect), `guest/` (client, controller, screenshot) or `runner/`: result
-files are pulled through the control plane's `/file` and screenshots through `/execute`, both as `user` without sudo.
-`sudo` appears in `vm/bake.py` (`sudo -S shutdown`, build time only), in provisioners and in two pre-task hooks of
-other domains (`astro/prepare_episode.py`, `biomed/install_mnova_license.py`, which run before the task's config on
-their own snapshots), and in the agents' prompts (`prompt_agent` and `claude_cua` tell the model that the password is
-`password` for sudo; after the lockdown that password no longer works, which the model may try and fail). Whether the
-control plane server itself runs as root or as `user` could not be read; the code above does not call sudo.
+No. Verified both by reading `src/osworld_science/{harness,guest,runner}/` and by running an end-to-end `osci run --agent prompt` episode on `ubuntu_stm.qcow2`: result files are pulled through the control plane's `/file` and screenshots/actions through `/execute`, both without requiring `sudo` as `user`. After `config` runs `/usr/local/sbin/stm-lockdown`, `user` is denied `sudo -n`, `sudo -S` (with password), and `pkexec`, cannot read `/var/lib/stm-bench/private/`, can still read `/var/lib/stm-bench/export/`, and `osci vm check` continues to pass.
 
 ## Tests that ran, and what stays untested
 
-See the report that came with this directory; in short, run: the launcher and `stm-start` unit tests
-(`tests/test_osworld_guest.py` in the repository, about 60 tests, including the real console offscreen, `stm-lockdown` with a fake `visudo` and the FIFO wait); `install.sh` in a
-rootless `ubuntu:22.04` container (offline, one uid mapped); the console under Xvfb 1920x1080 with openbox, started
-through the launcher by `stm-start`, screenshot and export checked; the grader image built and run.
-Not run: the OSWorld base image, GNOME (mutter) and its autostart, systemd and `User=stm`, real file ownership and
-the denial of the private directory to `user`, the control plane's `/execute` and screenshot path, `common/guest_run.py`,
-`osci vm bake`, Docker (the image was run with podman and `--user 0`, because a one-uid user namespace cannot start a
-container as uid 10001), `stm_setup.py` end to end. The repository's workflow `.github/workflows/osworld-guest.yml`
-(manual trigger; it ran through on `ubuntu-22.04`: install, lockdown, console start, permissions, grade) covers the systemd, ownership and permission parts on an `ubuntu-22.04` runner.
+- **End-to-end KVM + Docker validation (`ubuntu-24.04` host with `/dev/kvm`, Docker, and OSWorld `Ubuntu.qcow2` base, 2026-11-18)**:
+  - `build_grader.sh` built `stmbench-grader:1740614e53db` on Docker; `pytest tests/unit/test_layout_and_images.py` (3/3), `pytest tests/grader/test_grader_suites.py -k stm` (57/57 in Docker as uid 10001 with `--network none`), and `osci score` on the three reference exports (`PASS 1.0`) and cross-task export (`FAIL 0.0`) all passed.
+  - `build_image.sh` with `--smoke` booted `Ubuntu.qcow2` on `:5190`, ran `bootstrap_guest.sh` + `install.sh` (including GNOME notification/lock suppression via `gsettings`), verified all paths/services as `user`, ran the GUI smoke test (`stm-start stm_p4_atom_01` -> fullscreen `stmbench-gui.stmbench-gui` on `:0` -> `stm_smoke.png` -> `stm-bench-reset`), passed `osci vm check`, and baked `data/stm/vm/ubuntu_stm.qcow2` + `.md5` + `.manifest.json`.
+  - Cold-booted `data/stm/vm/ubuntu_stm.qcow2` under `osci run --agent prompt --tasks stm_p4_atom_01` (`max_steps=250`): passed `tools_probe`, staged `stm-lockdown` + `stm-start`, executed `PromptAgent` steps, collected `session.json`, `actions.jsonl`, `digests.jsonl`, and `report.json`, and graded via Docker `stmbench-grader:1740614e53db` with consistent replay.
+  - Post-episode checks on `:5190` confirmed `sudo -n`, `echo password | sudo -S`, `pkexec`, and reading `/var/lib/stm-bench/private` all fail as `user`.
+- **Unit and container checks**: `tests/test_osworld_guest.py` (~60 tests) and `.github/workflows/osworld-guest.yml` in STM-Bench at `1740614e53db`.
+- **Not tested**: layering onto a multi-domain unified image (tested as standalone snapshot `ubuntu_stm.qcow2`).

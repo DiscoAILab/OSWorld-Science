@@ -82,7 +82,7 @@ def verify(guest) -> bool:
         ("the export directory can be read", "ls /var/lib/stm-bench/export >/dev/null"),
         ("the export directory cannot be written", "! touch /var/lib/stm-bench/export/.probe 2>/dev/null"),
         ("the venv imports the console and Qt", "/opt/stm-bench/venv/bin/python -c 'import stmbench.gui.app, PySide6'"),
-        ("stm-lockdown is installed", "test -x /usr/local/sbin/stm-lockdown"),
+        ("stm-lockdown is installed", "test -f /usr/local/sbin/stm-lockdown && test \"$(stat -c %a /usr/local/sbin/stm-lockdown)\" = 750"),
         ("no episode has started", "test -z \"$(ls -A /var/lib/stm-bench/export)\" && ! test -e /run/stm-bench/task"),
     ]
     good = True

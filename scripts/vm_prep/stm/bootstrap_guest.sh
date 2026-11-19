@@ -13,8 +13,15 @@ trap 'shred -u -z "$P/tasks.json" 2>/dev/null || true; rm -rf "$P/repo" "$P/inst
 
 # shellcheck disable=SC1091
 . "$P/install.env"
-S apt-get -o DPkg::Lock::Timeout=180 update
-S apt-get -o DPkg::Lock::Timeout=180 install --no-install-recommends -y git ca-certificates
+updated=0
+for _ in $(seq 1 30); do
+  if S apt-get -o DPkg::Lock::Timeout=180 update && S apt-get -o DPkg::Lock::Timeout=180 install --no-install-recommends -y git ca-certificates; then
+    updated=1
+    break
+  fi
+  sleep 5
+done
+[ "$updated" = 1 ]
 rm -rf "$P/repo"; mkdir -p "$P/repo"
 git -C "$P/repo" init -q
 git -C "$P/repo" fetch -q --depth 1 "$STM_REPO_URL" "$STM_COMMIT"
@@ -22,6 +29,9 @@ HEAD=$(git -C "$P/repo" rev-parse FETCH_HEAD)
 case "$HEAD" in "${STM_COMMIT}"*) ;; *) echo "fetched ${HEAD:0:12}, not ${STM_COMMIT:0:12}"; exit 1;; esac
 mkdir -p "$P/src"
 git -C "$P/repo" archive "$HEAD" deploy/osworld/guest | tar -x -C "$P/src"
-STM_TASKS_JSON="$P/tasks.json" STM_INSTALL_ENV="$P/install.env" S bash "$P/src/deploy/osworld/guest/install.sh"
+STM_SKIP_APT_UPDATE=1 STM_TASKS_JSON="$P/tasks.json" STM_INSTALL_ENV="$P/install.env" S bash "$P/src/deploy/osworld/guest/install.sh"
 rm -rf "$P/src"
+gsettings set org.gnome.desktop.notifications show-banners false || true
+gsettings set org.gnome.desktop.session idle-delay 0 || true
+gsettings set org.gnome.desktop.screensaver lock-enabled false || true
 echo "bootstrap done: ${HEAD:0:12}"

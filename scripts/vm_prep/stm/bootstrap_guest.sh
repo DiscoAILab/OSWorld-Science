@@ -31,7 +31,17 @@ mkdir -p "$P/src"
 git -C "$P/repo" archive "$HEAD" deploy/osworld/guest | tar -x -C "$P/src"
 STM_SKIP_APT_UPDATE=1 STM_TASKS_JSON="$P/tasks.json" STM_INSTALL_ENV="$P/install.env" S bash "$P/src/deploy/osworld/guest/install.sh"
 rm -rf "$P/src"
+# gsettings commits through dconf on the session bus. The control plane need not export the bus address, and without it
+# the write is not committed; use the login session's bus when its socket exists, and read the values back.
+uid=$(id -u)
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -S "/run/user/$uid/bus" ]; then
+  export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$uid}" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus"
+fi
 gsettings set org.gnome.desktop.notifications show-banners false || true
 gsettings set org.gnome.desktop.session idle-delay 0 || true
 gsettings set org.gnome.desktop.screensaver lock-enabled false || true
+for k in "notifications show-banners" "session idle-delay" "screensaver lock-enabled"; do
+  # shellcheck disable=SC2086
+  echo "gsettings org.gnome.desktop.$k: $(gsettings get org.gnome.desktop.$k 2>&1 || true)"
+done
 echo "bootstrap done: ${HEAD:0:12}"

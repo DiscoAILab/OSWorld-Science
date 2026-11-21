@@ -332,3 +332,24 @@ snapshots:
       gnome-terminal: terminal
       xterm: terminal
       nautilus: files
+
+  ubuntu_stm:
+    description: "STM-Bench P4 (single-atom positioning, Eigler and Schweizer 1990): the desktop console of a simulated scanning tunnelling microscope (PySide6 on Qt 6.12, Python 3.13 and numpy 2.5.4 / scipy 1.18.1 / PyYAML 6.0.3, all pinned) on the OSWorld Ubuntu 22.04 base, 1920x1080. The console runs as the account `stm` (no password login), started at task start by `stm-start <task_id>` through a FIFO; the seed of each task lives in /var/lib/stm-bench/private (0700, stm) and never reaches the agent's account; the export (records, frame hashes, report; no seed or truth) is written to /var/lib/stm-bench/export (readable by `user`, writable only by `stm`) and graded on the host by replay in the image stmbench-grader:<commit>. Built by scripts/vm_prep/stm/build_image.sh from the OSWorld base; the repository commit, the Python build and the Qt version are pinned in scripts/vm_prep/stm/pins.sh. `provision` is null on purpose: the build needs the private task list, which a reset does not have."
+    domain: stm
+    image: ubuntu_stm.qcow2
+    default_port: 5190
+    container_prefix: osci_stm
+    tools_probe: "test -x /usr/local/bin/stm-start && /opt/stm-bench/venv/bin/python -c 'import stmbench.gui.app, PySide6' && echo stm"
+    provision: null
+    pre_task_hooks: []
+    check_commands: [stm-start, xhost, python3, firefox, gedit, gnome-terminal]
+    # nothing of an episode may be in the image: the launcher keeps its state under /run (tmpfs) and the stm-owned
+    # directories stay empty until stm-start; this removes only the build's own leftovers
+    bake_cleanup: "rm -rf /tmp/stm-prov /home/user/stm_install.* /home/user/stm_scrub.*"
+    window_classes:
+      stmbench-gui: stm
+      gnome-terminal: terminal
+      xterm: terminal
+      firefox: firefox
+      gedit: gedit
+      nautilus: files
